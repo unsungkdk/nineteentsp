@@ -339,8 +339,8 @@ else
     print_info "✓ .env file copied to service directory"
 fi
 
-# Step 7: Setup PM2 and start services
-print_info "Step 7: Setting up PM2 and starting services..."
+# Step 7: Setup PM2 and restart services
+print_info "Step 7: Setting up PM2 and restarting services..."
 
 # Check if PM2 is installed
 if ! $SSH_CMD "command -v pm2 >/dev/null 2>&1"; then
@@ -351,18 +351,21 @@ else
     print_info "✓ PM2 is already installed"
 fi
 
-# Stop existing PM2 processes if any
-print_info "Stopping existing services..."
-$SSH_CMD "cd $SERVER_APP_DIR && pm2 delete all 2>/dev/null || true"
-$SSH_CMD "cd $SERVER_APP_DIR && pm2 kill 2>/dev/null || true"
+# Restart or start services with PM2
+print_info "Restarting services with PM2..."
 
-# Start services with PM2
-print_info "Starting services with PM2..."
-
-# Start Merchant Onboarding Service (port 3001) - Only service for now
-$SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/merchant-onboarding-service/dist/index.js --name merchant-onboarding --cwd $SERVER_APP_DIR/services/merchant-onboarding-service" || {
-    print_error "Failed to start merchant-onboarding service"
-}
+# Check if merchant-onboarding process exists, restart it; otherwise start it
+if $SSH_CMD "cd $SERVER_APP_DIR && pm2 list | grep -q merchant-onboarding"; then
+    print_info "Restarting existing merchant-onboarding service..."
+    $SSH_CMD "cd $SERVER_APP_DIR && pm2 restart merchant-onboarding" || {
+        print_error "Failed to restart merchant-onboarding service"
+    }
+else
+    print_info "Starting merchant-onboarding service (first time)..."
+    $SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/merchant-onboarding-service/dist/index.js --name merchant-onboarding --cwd $SERVER_APP_DIR/services/merchant-onboarding-service" || {
+        print_error "Failed to start merchant-onboarding service"
+    }
+fi
 
 # Save PM2 configuration
 print_info "Saving PM2 configuration..."
