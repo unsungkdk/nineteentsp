@@ -220,17 +220,22 @@ EOF
 chmod 600 ~/.ssh/config"
     fi
     
-    # Test GitHub SSH connection
+    # Test GitHub SSH connection by trying to access the repo
     print_info "Testing GitHub SSH connection..."
-    GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
     
-    # GitHub returns various success messages, check for any positive response
-    # GitHub success messages include: "Hi username! You've successfully authenticated..."
-    if echo "$GITHUB_TEST" | grep -qiE "successfully authenticated|you've successfully authenticated|hi.*you've successfully"; then
-        print_info "✓ GitHub SSH is working correctly"
+    # First, try a simple git operation to test if SSH works
+    # If repo exists, try to fetch; if not, try to clone (dry run)
+    if $SSH_CMD "[ -d $SERVER_APP_DIR/.git ]"; then
+        # Repo exists, test by fetching
+        GITHUB_TEST=$($SSH_CMD "cd $SERVER_APP_DIR && GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git ls-remote $GITHUB_REPO 2>&1" || true)
     else
-        print_warn "GitHub SSH test failed. Output: $GITHUB_TEST"
-        print_warn "Key may not be added to GitHub account."
+        # Repo doesn't exist, test by trying to list remote
+        GITHUB_TEST=$($SSH_CMD "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git ls-remote $GITHUB_REPO 2>&1" || true)
+    fi
+    
+    # Check if git operation succeeded (no permission denied errors)
+    if echo "$GITHUB_TEST" | grep -qiE "Permission denied|publickey|Could not read from remote"; then
+        print_warn "GitHub SSH authentication failed."
         SERVER_PUB_KEY=$($SSH_CMD "cat ~/.ssh/github_deploy.pub")
         print_warn "Please verify this key is added to your GitHub account:"
         echo ""
@@ -240,13 +245,19 @@ chmod 600 ~/.ssh/config"
         read -p "Press Enter after verifying/adding the key to GitHub..."
         
         # Test again after user confirms
-        GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
-        if echo "$GITHUB_TEST" | grep -qiE "successfully authenticated|you've successfully authenticated|hi.*you've successfully"; then
-            print_info "✓ GitHub SSH is now working"
+        if $SSH_CMD "[ -d $SERVER_APP_DIR/.git ]"; then
+            GITHUB_TEST=$($SSH_CMD "cd $SERVER_APP_DIR && GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git ls-remote $GITHUB_REPO 2>&1" || true)
         else
-            print_error "GitHub SSH still not working. Test output: $GITHUB_TEST"
-            print_error "Please check the key is added correctly to GitHub."
+            GITHUB_TEST=$($SSH_CMD "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git ls-remote $GITHUB_REPO 2>&1" || true)
         fi
+        
+        if echo "$GITHUB_TEST" | grep -qiE "Permission denied|publickey|Could not read from remote"; then
+            print_error "GitHub SSH still not working. Please check the key is added correctly."
+        else
+            print_info "✓ GitHub SSH is now working"
+        fi
+    else
+        print_info "✓ GitHub SSH is working correctly"
     fi
 else
         # No existing key, generate a new one
@@ -273,12 +284,12 @@ Host github.com
 EOF
 chmod 600 ~/.ssh/config"
         
-        # Final test
-        GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
-        if echo "$GITHUB_TEST" | grep -qiE "successfully authenticated|you've successfully authenticated|hi.*you've successfully"; then
-            print_info "✓ GitHub SSH configured successfully"
-        else
+        # Final test by trying to access the repo
+        GITHUB_TEST=$($SSH_CMD "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git ls-remote $GITHUB_REPO 2>&1" || true)
+        if echo "$GITHUB_TEST" | grep -qiE "Permission denied|publickey|Could not read from remote"; then
             print_warn "GitHub SSH test failed. You may need to add the key manually."
+        else
+            print_info "✓ GitHub SSH configured successfully"
         fi
 fi
 
