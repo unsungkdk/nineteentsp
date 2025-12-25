@@ -122,8 +122,14 @@ print_info "Step 4: Checking GitHub SSH setup on server..."
 print_info "Adding GitHub to known_hosts..."
 $SSH_CMD "mkdir -p ~/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true"
 
-# Check if github_deploy key exists
-if $SSH_CMD "[ -f ~/.ssh/github_deploy ]"; then
+# Check if github_deploy key exists (check both private and public key)
+# Use a more robust check that handles SSH connection issues
+KEY_EXISTS="no"
+if $SSH_CMD "test -f ~/.ssh/github_deploy && test -f ~/.ssh/github_deploy.pub" 2>/dev/null; then
+    KEY_EXISTS="yes"
+fi
+
+if [ "$KEY_EXISTS" = "yes" ]; then
     print_info "Found existing GitHub SSH key."
     
     # Ensure SSH config is set up to use this key
@@ -182,6 +188,9 @@ chmod 600 ~/.ssh/config"
 else
         # No existing key, generate a new one
         print_info "No existing GitHub SSH key found. Generating new key..."
+        # Remove any existing key files first to avoid overwrite prompt
+        $SSH_CMD "rm -f ~/.ssh/github_deploy ~/.ssh/github_deploy.pub"
+        # Generate new key (non-interactive)
         $SSH_CMD "ssh-keygen -t ed25519 -C 'server-github-deploy' -f ~/.ssh/github_deploy -N ''"
         
         SERVER_PUB_KEY=$($SSH_CMD "cat ~/.ssh/github_deploy.pub")
