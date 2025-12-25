@@ -312,6 +312,14 @@ $SSH_CMD "cd $SERVER_APP_DIR && npm install" || {
 
 print_info "✓ Dependencies installed"
 
+# Generate Prisma client (must run from service directory)
+print_info "Generating Prisma client..."
+$SSH_CMD "cd $SERVER_APP_DIR/services/merchant-onboarding-service && npx prisma generate" || {
+    print_error "Failed to generate Prisma client"
+    exit 1
+}
+print_info "✓ Prisma client generated"
+
 # Build the project
 print_info "Building project..."
 # Clean old build output for merchant-onboarding-service
@@ -351,12 +359,17 @@ else
     print_info "✓ PM2 is already installed"
 fi
 
-# Configure PM2 log rotation (keep 14 days, max 10MB per file)
+# Configure PM2 log rotation (only if not already configured)
 print_info "Configuring PM2 log rotation..."
-$SSH_CMD "pm2 set pm2:log_rotate_max_size 10M" || true
-$SSH_CMD "pm2 set pm2:log_rotate_retain 14" || true
-$SSH_CMD "pm2 install pm2-logrotate" || true
-print_info "✓ PM2 log rotation configured (max 10MB per file, keep 14 days)"
+if ! $SSH_CMD "pm2 list | grep -q pm2-logrotate"; then
+    print_info "Installing pm2-logrotate module..."
+    $SSH_CMD "pm2 install pm2-logrotate" || true
+    $SSH_CMD "pm2 set pm2-logrotate:max_size 10M" || true
+    $SSH_CMD "pm2 set pm2-logrotate:retain 14" || true
+    print_info "✓ PM2 log rotation configured (max 10MB per file, keep 14 days)"
+else
+    print_info "✓ PM2 log rotation already configured"
+fi
 
 # Create logs directory for Winston logs
 print_info "Creating logs directory..."
@@ -381,7 +394,15 @@ fi
 # Save PM2 configuration
 print_info "Saving PM2 configuration..."
 $SSH_CMD "cd $SERVER_APP_DIR && pm2 save"
-$SSH_CMD "cd $SERVER_APP_DIR && pm2 startup 2>/dev/null || true"
+
+# Only setup PM2 startup script if not already configured
+if ! $SSH_CMD "[ -f /etc/systemd/system/pm2-root.service ]"; then
+    print_info "Setting up PM2 startup script..."
+    $SSH_CMD "cd $SERVER_APP_DIR && pm2 startup 2>/dev/null || true"
+    print_info "✓ PM2 startup script configured"
+else
+    print_info "✓ PM2 startup script already configured"
+fi
 
 # Show PM2 status
 print_info "PM2 Status:"
