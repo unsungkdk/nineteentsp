@@ -175,6 +175,10 @@ check_build_tools
 # Step 4: Setup GitHub SSH on server (if needed)
 print_info "Step 4: Checking GitHub SSH setup on server..."
 
+# Add GitHub to known_hosts to avoid host key verification failure
+print_info "Adding GitHub to known_hosts..."
+$SSH_CMD "mkdir -p ~/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true"
+
 if ! $SSH_CMD "ssh -T git@github.com >/dev/null 2>&1"; then
     print_warn "GitHub SSH not configured on server. Setting up..."
     
@@ -218,10 +222,16 @@ print_info "Step 5: Setting up repository on server..."
 
 if $SSH_CMD "[ -d $SERVER_APP_DIR/.git ]"; then
     print_info "Repository exists. Updating..."
-    $SSH_CMD "cd $SERVER_APP_DIR && git fetch origin && git reset --hard origin/$CURRENT_BRANCH"
+    # Ensure known_hosts is set up before fetching
+    $SSH_CMD "mkdir -p ~/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true"
+    $SSH_CMD "cd $SERVER_APP_DIR && GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git fetch origin && git reset --hard origin/$CURRENT_BRANCH"
 else
     print_info "Cloning repository..."
-    $SSH_CMD "mkdir -p $(dirname $SERVER_APP_DIR) && git clone $GITHUB_REPO $SERVER_APP_DIR"
+    # Ensure known_hosts is set up and clone with proper SSH config
+    $SSH_CMD "mkdir -p $(dirname $SERVER_APP_DIR) && \
+              mkdir -p ~/.ssh && \
+              ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null && \
+              GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git clone $GITHUB_REPO $SERVER_APP_DIR"
     $SSH_CMD "cd $SERVER_APP_DIR && git checkout $CURRENT_BRANCH 2>/dev/null || true"
 fi
 
