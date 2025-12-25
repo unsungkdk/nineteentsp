@@ -202,54 +202,53 @@ print_info "Step 4: Checking GitHub SSH setup on server..."
 print_info "Adding GitHub to known_hosts..."
 $SSH_CMD "mkdir -p ~/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true"
 
-# Check if GitHub SSH is already working
-# GitHub returns exit code 1 even on success, so we check for the success message
-GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
-if echo "$GITHUB_TEST" | grep -q "successfully authenticated\|You've successfully authenticated"; then
-    print_info "✓ GitHub SSH is already configured and working"
-else
-    print_warn "GitHub SSH not configured on server. Checking for existing key..."
+# Check if github_deploy key exists
+if $SSH_CMD "[ -f ~/.ssh/github_deploy ]"; then
+    print_info "Found existing GitHub SSH key."
     
-    # Check if github_deploy key already exists
-    if $SSH_CMD "[ -f ~/.ssh/github_deploy ]"; then
-        print_info "Found existing GitHub SSH key. Testing connection..."
-        
-        # Ensure SSH config is set up to use this key
-        if ! $SSH_CMD "grep -q 'github.com' ~/.ssh/config 2>/dev/null"; then
-            print_info "Configuring SSH to use existing key..."
-            $SSH_CMD "cat >> ~/.ssh/config << 'EOF'
+    # Ensure SSH config is set up to use this key
+    if ! $SSH_CMD "grep -q 'Host github.com' ~/.ssh/config 2>/dev/null"; then
+        print_info "Configuring SSH to use existing key..."
+        $SSH_CMD "cat >> ~/.ssh/config << 'EOF'
 Host github.com
     HostName github.com
     User git
     IdentityFile ~/.ssh/github_deploy
     IdentitiesOnly yes
+    StrictHostKeyChecking=no
 EOF
 chmod 600 ~/.ssh/config"
-        fi
-        
-        # Test if the existing key works
-        GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
-        if echo "$GITHUB_TEST" | grep -q "successfully authenticated\|You've successfully authenticated"; then
-            print_info "✓ Existing GitHub SSH key is working"
-        else
-            print_warn "Existing key found but not working with GitHub."
-            SERVER_PUB_KEY=$($SSH_CMD "cat ~/.ssh/github_deploy.pub")
-            print_warn "Please verify this key is added to your GitHub account:"
-            echo ""
-            echo "$SERVER_PUB_KEY"
-            echo ""
-            print_warn "Go to: https://github.com/settings/keys"
-            read -p "Press Enter after verifying/adding the key to GitHub..."
-            
-            # Test again after user confirms
-            GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
-            if echo "$GITHUB_TEST" | grep -q "successfully authenticated\|You've successfully authenticated"; then
-                print_info "✓ GitHub SSH is now working"
-            else
-                print_error "GitHub SSH still not working. Please check the key is added correctly."
-            fi
-        fi
+    fi
+    
+    # Test GitHub SSH connection
+    print_info "Testing GitHub SSH connection..."
+    GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
+    
+    # GitHub returns various success messages, check for any positive response
+    # GitHub success messages include: "Hi username! You've successfully authenticated..."
+    if echo "$GITHUB_TEST" | grep -qiE "successfully authenticated|you've successfully authenticated|hi.*you've successfully"; then
+        print_info "✓ GitHub SSH is working correctly"
     else
+        print_warn "GitHub SSH test failed. Output: $GITHUB_TEST"
+        print_warn "Key may not be added to GitHub account."
+        SERVER_PUB_KEY=$($SSH_CMD "cat ~/.ssh/github_deploy.pub")
+        print_warn "Please verify this key is added to your GitHub account:"
+        echo ""
+        echo "$SERVER_PUB_KEY"
+        echo ""
+        print_warn "Go to: https://github.com/settings/keys"
+        read -p "Press Enter after verifying/adding the key to GitHub..."
+        
+        # Test again after user confirms
+        GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
+        if echo "$GITHUB_TEST" | grep -qiE "successfully authenticated|you've successfully authenticated|hi.*you've successfully"; then
+            print_info "✓ GitHub SSH is now working"
+        else
+            print_error "GitHub SSH still not working. Test output: $GITHUB_TEST"
+            print_error "Please check the key is added correctly to GitHub."
+        fi
+    fi
+else
         # No existing key, generate a new one
         print_info "No existing GitHub SSH key found. Generating new key..."
         $SSH_CMD "ssh-keygen -t ed25519 -C 'server-github-deploy' -f ~/.ssh/github_deploy -N ''"
@@ -270,17 +269,17 @@ Host github.com
     User git
     IdentityFile ~/.ssh/github_deploy
     IdentitiesOnly yes
+    StrictHostKeyChecking=no
 EOF
 chmod 600 ~/.ssh/config"
-    fi
-    
-    # Final test
-    GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
-    if echo "$GITHUB_TEST" | grep -q "successfully authenticated\|You've successfully authenticated"; then
-        print_info "✓ GitHub SSH configured successfully"
-    else
-        print_warn "GitHub SSH test failed. You may need to add the key manually."
-    fi
+        
+        # Final test
+        GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
+        if echo "$GITHUB_TEST" | grep -qiE "successfully authenticated|you've successfully authenticated|hi.*you've successfully"; then
+            print_info "✓ GitHub SSH configured successfully"
+        else
+            print_warn "GitHub SSH test failed. You may need to add the key manually."
+        fi
 fi
 
 # Step 5: Clone or update repository on server
