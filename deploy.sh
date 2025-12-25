@@ -36,6 +36,29 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Setup SSH agent to avoid multiple passphrase prompts
+print_info "Setting up SSH agent..."
+if [ -z "$SSH_AUTH_SOCK" ]; then
+    eval "$(ssh-agent -s)" > /dev/null 2>&1
+    export SSH_AUTH_SOCK
+    export SSH_AGENT_PID
+fi
+
+# Add SSH key to agent (will prompt for passphrase once)
+print_info "Adding SSH key to agent (enter passphrase when prompted)..."
+if ! ssh-add "$SERVER_SSH_KEY" 2>/dev/null; then
+    print_warn "Could not add key to agent. You may be prompted for passphrase multiple times."
+fi
+
+# Cleanup function to kill ssh-agent on exit (only if we started it)
+ORIGINAL_SSH_AUTH_SOCK="$SSH_AUTH_SOCK"
+cleanup() {
+    if [ -n "$SSH_AGENT_PID" ] && [ -z "$ORIGINAL_SSH_AUTH_SOCK" ]; then
+        ssh-agent -k > /dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT
+
 # Step 1: Push to GitHub
 print_info "Step 1: Pushing code to GitHub..."
 

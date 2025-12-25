@@ -19,7 +19,7 @@
     "@prisma/client": "^5.7.1",
     "fastify": "^4.24.3",
     "fastify-swagger": "^5.0.0",
-    "fastify-cors": "^8.4.0",
+    "fastify-cors": "^9.0.1",
     "zod": "^3.22.4",
     "dotenv": "^16.3.1",
     "axios": "^1.6.2"
