@@ -202,12 +202,45 @@ print_info "Step 4: Checking GitHub SSH setup on server..."
 print_info "Adding GitHub to known_hosts..."
 $SSH_CMD "mkdir -p ~/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true"
 
-if ! $SSH_CMD "ssh -T git@github.com >/dev/null 2>&1"; then
-    print_warn "GitHub SSH not configured on server. Setting up..."
+# Check if GitHub SSH is already working
+if $SSH_CMD "ssh -T git@github.com >/dev/null 2>&1"; then
+    print_info "✓ GitHub SSH is already configured and working"
+else
+    print_warn "GitHub SSH not configured on server. Checking for existing key..."
     
-    # Check if server has SSH key for GitHub
-    if ! $SSH_CMD "[ -f ~/.ssh/id_ed25519 ] || [ -f ~/.ssh/id_rsa ]"; then
-        print_info "Generating SSH key for GitHub on server..."
+    # Check if github_deploy key already exists
+    if $SSH_CMD "[ -f ~/.ssh/github_deploy ]"; then
+        print_info "Found existing GitHub SSH key. Testing connection..."
+        
+        # Ensure SSH config is set up to use this key
+        if ! $SSH_CMD "grep -q 'github.com' ~/.ssh/config 2>/dev/null"; then
+            print_info "Configuring SSH to use existing key..."
+            $SSH_CMD "cat >> ~/.ssh/config << 'EOF'
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/github_deploy
+    IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config"
+        fi
+        
+        # Test if the existing key works
+        if $SSH_CMD "ssh -T git@github.com >/dev/null 2>&1"; then
+            print_info "✓ Existing GitHub SSH key is working"
+        else
+            print_warn "Existing key found but not working with GitHub."
+            SERVER_PUB_KEY=$($SSH_CMD "cat ~/.ssh/github_deploy.pub")
+            print_warn "Please verify this key is added to your GitHub account:"
+            echo ""
+            echo "$SERVER_PUB_KEY"
+            echo ""
+            print_warn "Go to: https://github.com/settings/keys"
+            read -p "Press Enter after verifying/adding the key to GitHub..."
+        fi
+    else
+        # No existing key, generate a new one
+        print_info "No existing GitHub SSH key found. Generating new key..."
         $SSH_CMD "ssh-keygen -t ed25519 -C 'server-github-deploy' -f ~/.ssh/github_deploy -N ''"
         
         SERVER_PUB_KEY=$($SSH_CMD "cat ~/.ssh/github_deploy.pub")
@@ -230,14 +263,12 @@ EOF
 chmod 600 ~/.ssh/config"
     fi
     
-    # Test GitHub connection
+    # Final test
     if $SSH_CMD "ssh -T git@github.com 2>&1 | grep -q 'successfully authenticated'"; then
-        print_info "✓ GitHub SSH configured"
+        print_info "✓ GitHub SSH configured successfully"
     else
         print_warn "GitHub SSH test failed. You may need to add the key manually."
     fi
-else
-    print_info "✓ GitHub SSH is already configured"
 fi
 
 # Step 5: Clone or update repository on server
