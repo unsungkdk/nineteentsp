@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=services/merchant-onboarding-service\" \"npm run dev --workspace=services/payment-processing-service\" \"npm run dev --workspace=services/transaction-monitoring-service\" \"npm run dev --workspace=services/settlement-reporting-service\"",
-    "build": "npm run build --workspace=packages/types && npm run build --workspace=packages/common && npm run build --workspace=services/merchant-onboarding-service && npm run build --workspace=services/payment-processing-service && npm run build --workspace=services/transaction-monitoring-service && npm run build --workspace=services/settlement-reporting-service",
+    "build": "npm run build --workspace=packages/types && npm run build --workspace=packages/common && npm run build --workspace=services/merchant-onboarding-service",
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces",
     "db:migrate": "npm run db:migrate --workspace=services/merchant-onboarding-service",

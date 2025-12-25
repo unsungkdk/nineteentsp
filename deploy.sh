@@ -330,13 +330,10 @@ if ! $SSH_CMD "[ -f $SERVER_APP_DIR/.env ]"; then
     print_warn "You may need to manually configure .env file on the server with database credentials."
 else
     print_info "✓ .env file exists on server"
-    # Copy .env to each service directory so dotenv.config() can find it
-    print_info "Copying .env to service directories..."
+    # Copy .env to service directory so dotenv.config() can find it
+    print_info "Copying .env to service directory..."
     $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/merchant-onboarding-service/.env 2>/dev/null || true"
-    $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/payment-processing-service/.env 2>/dev/null || true"
-    $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/transaction-monitoring-service/.env 2>/dev/null || true"
-    $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/settlement-reporting-service/.env 2>/dev/null || true"
-    print_info "✓ .env files copied to service directories"
+    print_info "✓ .env file copied to service directory"
 fi
 
 # Step 7: Setup PM2 and start services
@@ -359,24 +356,9 @@ $SSH_CMD "cd $SERVER_APP_DIR && pm2 kill 2>/dev/null || true"
 # Start services with PM2
 print_info "Starting services with PM2..."
 
-# Start Merchant Onboarding Service (port 3001)
+# Start Merchant Onboarding Service (port 3001) - Only service for now
 $SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/merchant-onboarding-service/dist/index.js --name merchant-onboarding --cwd $SERVER_APP_DIR/services/merchant-onboarding-service" || {
     print_error "Failed to start merchant-onboarding service"
-}
-
-# Start Payment Processing Service (port 3002)
-$SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/payment-processing-service/dist/index.js --name payment-processing --cwd $SERVER_APP_DIR/services/payment-processing-service" || {
-    print_error "Failed to start payment-processing service"
-}
-
-# Start Transaction Monitoring Service (port 3003)
-$SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/transaction-monitoring-service/dist/index.js --name transaction-monitoring --cwd $SERVER_APP_DIR/services/transaction-monitoring-service" || {
-    print_error "Failed to start transaction-monitoring service"
-}
-
-# Start Settlement Reporting Service (port 3004)
-$SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/settlement-reporting-service/dist/index.js --name settlement-reporting --cwd $SERVER_APP_DIR/services/settlement-reporting-service" || {
-    print_error "Failed to start settlement-reporting service"
 }
 
 # Save PM2 configuration
@@ -413,9 +395,6 @@ print_info "Step 8: Testing health endpoints..."
 # Test each service health endpoint
 SERVICES=(
     "merchant-onboarding:3001"
-    "payment-processing:3002"
-    "transaction-monitoring:3003"
-    "settlement-reporting:3004"
 )
 
 HEALTH_CHECK_FAILED=0
@@ -452,15 +431,9 @@ print_info "Services are running with PM2"
 print_info ""
 print_info "Service URLs:"
 print_info "  - Merchant Onboarding: http://$SERVER_IP:3001/health"
-print_info "  - Payment Processing: http://$SERVER_IP:3002/health"
-print_info "  - Transaction Monitoring: http://$SERVER_IP:3003/health"
-print_info "  - Settlement Reporting: http://$SERVER_IP:3004/health"
 print_info ""
 print_info "API Documentation (Swagger):"
 print_info "  - Merchant Onboarding: http://$SERVER_IP:3001/api-docs"
-print_info "  - Payment Processing: http://$SERVER_IP:3002/api-docs"
-print_info "  - Transaction Monitoring: http://$SERVER_IP:3003/api-docs"
-print_info "  - Settlement Reporting: http://$SERVER_IP:3004/api-docs"
 print_info ""
 print_info "PM2 Commands:"
 print_info "  - View status: ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 list'"
