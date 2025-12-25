@@ -351,6 +351,17 @@ else
     print_info "✓ PM2 is already installed"
 fi
 
+# Configure PM2 log rotation (keep 14 days, max 10MB per file)
+print_info "Configuring PM2 log rotation..."
+$SSH_CMD "pm2 set pm2:log_rotate_max_size 10M" || true
+$SSH_CMD "pm2 set pm2:log_rotate_retain 14" || true
+$SSH_CMD "pm2 install pm2-logrotate" || true
+print_info "✓ PM2 log rotation configured (max 10MB per file, keep 14 days)"
+
+# Create logs directory for Winston logs
+print_info "Creating logs directory..."
+$SSH_CMD "cd $SERVER_APP_DIR && mkdir -p services/merchant-onboarding-service/logs" || true
+
 # Restart or start services with PM2
 print_info "Restarting services with PM2..."
 
