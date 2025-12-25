@@ -203,7 +203,9 @@ print_info "Adding GitHub to known_hosts..."
 $SSH_CMD "mkdir -p ~/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true"
 
 # Check if GitHub SSH is already working
-if $SSH_CMD "ssh -T git@github.com >/dev/null 2>&1"; then
+# GitHub returns exit code 1 even on success, so we check for the success message
+GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
+if echo "$GITHUB_TEST" | grep -q "successfully authenticated\|You've successfully authenticated"; then
     print_info "✓ GitHub SSH is already configured and working"
 else
     print_warn "GitHub SSH not configured on server. Checking for existing key..."
@@ -226,7 +228,8 @@ chmod 600 ~/.ssh/config"
         fi
         
         # Test if the existing key works
-        if $SSH_CMD "ssh -T git@github.com >/dev/null 2>&1"; then
+        GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
+        if echo "$GITHUB_TEST" | grep -q "successfully authenticated\|You've successfully authenticated"; then
             print_info "✓ Existing GitHub SSH key is working"
         else
             print_warn "Existing key found but not working with GitHub."
@@ -237,6 +240,14 @@ chmod 600 ~/.ssh/config"
             echo ""
             print_warn "Go to: https://github.com/settings/keys"
             read -p "Press Enter after verifying/adding the key to GitHub..."
+            
+            # Test again after user confirms
+            GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
+            if echo "$GITHUB_TEST" | grep -q "successfully authenticated\|You've successfully authenticated"; then
+                print_info "✓ GitHub SSH is now working"
+            else
+                print_error "GitHub SSH still not working. Please check the key is added correctly."
+            fi
         fi
     else
         # No existing key, generate a new one
@@ -264,7 +275,8 @@ chmod 600 ~/.ssh/config"
     fi
     
     # Final test
-    if $SSH_CMD "ssh -T git@github.com 2>&1 | grep -q 'successfully authenticated'"; then
+    GITHUB_TEST=$($SSH_CMD "ssh -T git@github.com 2>&1" || true)
+    if echo "$GITHUB_TEST" | grep -q "successfully authenticated\|You've successfully authenticated"; then
         print_info "✓ GitHub SSH configured successfully"
     else
         print_warn "GitHub SSH test failed. You may need to add the key manually."
