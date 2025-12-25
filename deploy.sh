@@ -115,87 +115,7 @@ fi
 
 print_info "✓ Server connection successful"
 
-# Step 3: Check and install server dependencies
-print_info "Step 3: Checking server dependencies..."
-
-# Function to check and install Node.js
-check_nodejs() {
-    print_info "Checking Node.js installation..."
-    NODE_VERSION=$($SSH_CMD "node --version 2>/dev/null | cut -d'v' -f2" || echo "0")
-    
-    if [ -z "$NODE_VERSION" ] || [ "$NODE_VERSION" = "0" ]; then
-        print_warn "Node.js not found. Installing Node.js 20.x..."
-        $SSH_CMD "curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs" || {
-            print_error "Failed to install Node.js"
-            exit 1
-        }
-        print_info "✓ Node.js installed"
-    else
-        # Check if version is >= 20
-        MAJOR_VERSION=$(echo "$NODE_VERSION" | cut -d'.' -f1)
-        if [ "$MAJOR_VERSION" -lt 20 ]; then
-            print_warn "Node.js version $NODE_VERSION is less than 20. Upgrading..."
-            $SSH_CMD "curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs"
-            print_info "✓ Node.js upgraded"
-        else
-            print_info "✓ Node.js $NODE_VERSION is installed"
-        fi
-    fi
-}
-
-# Function to check and install npm
-check_npm() {
-    print_info "Checking npm installation..."
-    NPM_VERSION=$($SSH_CMD "npm --version 2>/dev/null" || echo "0")
-    
-    if [ -z "$NPM_VERSION" ] || [ "$NPM_VERSION" = "0" ]; then
-        print_warn "npm not found. Installing..."
-        $SSH_CMD "apt-get update && apt-get install -y npm"
-        print_info "✓ npm installed"
-    else
-        # Check if version is >= 10
-        MAJOR_VERSION=$(echo "$NPM_VERSION" | cut -d'.' -f1)
-        if [ "$MAJOR_VERSION" -lt 10 ]; then
-            print_warn "npm version $NPM_VERSION is less than 10. Upgrading..."
-            $SSH_CMD "npm install -g npm@latest"
-            print_info "✓ npm upgraded"
-        else
-            print_info "✓ npm $NPM_VERSION is installed"
-        fi
-    fi
-}
-
-# Function to check and install Git
-check_git() {
-    print_info "Checking Git installation..."
-    if ! $SSH_CMD "command -v git >/dev/null 2>&1"; then
-        print_warn "Git not found. Installing..."
-        $SSH_CMD "apt-get update && apt-get install -y git"
-        print_info "✓ Git installed"
-    else
-        print_info "✓ Git is installed"
-    fi
-}
-
-# Function to check and install build essentials
-check_build_tools() {
-    print_info "Checking build tools..."
-    if ! $SSH_CMD "command -v make >/dev/null 2>&1"; then
-        print_warn "Build tools not found. Installing..."
-        $SSH_CMD "apt-get update && apt-get install -y build-essential"
-        print_info "✓ Build tools installed"
-    else
-        print_info "✓ Build tools are installed"
-    fi
-}
-
-# Run dependency checks
-check_git
-check_nodejs
-check_npm
-check_build_tools
-
-# Step 4: Setup GitHub SSH on server (if needed)
+# Step 3: Setup GitHub SSH on server (if needed)
 print_info "Step 4: Checking GitHub SSH setup on server..."
 
 # Add GitHub to known_hosts to avoid host key verification failure
@@ -293,28 +213,33 @@ chmod 600 ~/.ssh/config"
         fi
 fi
 
-# Step 5: Clone or update repository on server
-print_info "Step 5: Setting up repository on server..."
+# Step 4: Update repository on server with latest code
+print_info "Step 4: Updating repository with latest code..."
 
+# Ensure known_hosts is set up
+$SSH_CMD "mkdir -p ~/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true"
+
+# Check if directory exists and is a git repository
 if $SSH_CMD "[ -d $SERVER_APP_DIR/.git ]"; then
-    print_info "Repository exists. Updating..."
-    # Ensure known_hosts is set up before fetching
-    $SSH_CMD "mkdir -p ~/.ssh && ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true"
+    print_info "Repository exists. Pulling latest code..."
     $SSH_CMD "cd $SERVER_APP_DIR && GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git fetch origin && git reset --hard origin/$CURRENT_BRANCH"
+    print_info "✓ Repository updated with latest code"
 else
+    # Directory exists but is not a git repo, remove it and clone fresh
+    if $SSH_CMD "[ -d $SERVER_APP_DIR ]"; then
+        print_info "Directory exists but is not a git repository. Removing and cloning fresh..."
+        $SSH_CMD "rm -rf $SERVER_APP_DIR"
+    fi
+    
     print_info "Cloning repository..."
-    # Ensure known_hosts is set up and clone with proper SSH config
     $SSH_CMD "mkdir -p $(dirname $SERVER_APP_DIR) && \
-              mkdir -p ~/.ssh && \
-              ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null && \
               GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' git clone $GITHUB_REPO $SERVER_APP_DIR"
     $SSH_CMD "cd $SERVER_APP_DIR && git checkout $CURRENT_BRANCH 2>/dev/null || true"
+    print_info "✓ Repository cloned"
 fi
 
-print_info "✓ Repository updated on server"
-
-# Step 6: Install dependencies and build
-print_info "Step 6: Installing dependencies and building..."
+# Step 5: Install dependencies and build
+print_info "Step 5: Installing dependencies and building..."
 
 $SSH_CMD "cd $SERVER_APP_DIR && npm install" || {
     print_error "Failed to install dependencies"
@@ -343,51 +268,14 @@ $SSH_CMD "cd $SERVER_APP_DIR && npm run build" || {
 
 print_info "✓ Project built successfully"
 
-# Step 6.5: Ensure .env file exists on server and copy to service directories
-print_info "Checking for .env file on server..."
-if ! $SSH_CMD "[ -f $SERVER_APP_DIR/.env ]"; then
-    print_warn ".env file not found on server. Creating from template..."
-    print_warn "Please ensure DATABASE_URL and other environment variables are set correctly."
-    $SSH_CMD "cd $SERVER_APP_DIR && touch .env"
-    print_warn "You may need to manually configure .env file on the server with database credentials."
-else
-    print_info "✓ .env file exists on server"
-    # Copy .env to service directory so dotenv.config() can find it
-    print_info "Copying .env to service directory..."
-    $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/merchant-onboarding-service/.env 2>/dev/null || true"
-    print_info "✓ .env file copied to service directory"
-fi
+# Step 6: Restart services with PM2
+print_info "Step 6: Restarting services with PM2..."
 
-# Step 7: Setup PM2 and restart services
-print_info "Step 7: Setting up PM2 and restarting services..."
-
-# Check if PM2 is installed
-if ! $SSH_CMD "command -v pm2 >/dev/null 2>&1"; then
-    print_info "Installing PM2..."
-    $SSH_CMD "npm install -g pm2"
-    print_info "✓ PM2 installed"
-else
-    print_info "✓ PM2 is already installed"
-fi
-
-# Configure PM2 log rotation (only if not already configured)
-print_info "Configuring PM2 log rotation..."
-if ! $SSH_CMD "pm2 list | grep -q pm2-logrotate"; then
-    print_info "Installing pm2-logrotate module..."
-    $SSH_CMD "pm2 install pm2-logrotate" || true
-    $SSH_CMD "pm2 set pm2-logrotate:max_size 10M" || true
-    $SSH_CMD "pm2 set pm2-logrotate:retain 14" || true
-    print_info "✓ PM2 log rotation configured (max 10MB per file, keep 14 days)"
-else
-    print_info "✓ PM2 log rotation already configured"
-fi
-
-# Create logs directory for Winston logs
-print_info "Creating logs directory..."
+# Create logs directory for Winston logs (if needed)
 $SSH_CMD "cd $SERVER_APP_DIR && mkdir -p services/merchant-onboarding-service/logs" || true
 
-# Restart or start services with PM2
-print_info "Restarting services with PM2..."
+# Restart services with PM2
+print_info "Restarting merchant-onboarding service..."
 
 # Check if merchant-onboarding process exists, restart it; otherwise start it
 if $SSH_CMD "cd $SERVER_APP_DIR && pm2 list | grep -q merchant-onboarding"; then
@@ -405,15 +293,6 @@ fi
 # Save PM2 configuration
 print_info "Saving PM2 configuration..."
 $SSH_CMD "cd $SERVER_APP_DIR && pm2 save"
-
-# Only setup PM2 startup script if not already configured
-if ! $SSH_CMD "[ -f /etc/systemd/system/pm2-root.service ]"; then
-    print_info "Setting up PM2 startup script..."
-    $SSH_CMD "cd $SERVER_APP_DIR && pm2 startup 2>/dev/null || true"
-    print_info "✓ PM2 startup script configured"
-else
-    print_info "✓ PM2 startup script already configured"
-fi
 
 # Show PM2 status
 print_info "PM2 Status:"
@@ -438,8 +317,8 @@ if [ "$ERRORED_SERVICES" != "0" ] && [ "$ERRORED_SERVICES" != "" ]; then
     $SSH_CMD "cd $SERVER_APP_DIR && pm2 logs --lines 50 --nostream" || true
 fi
 
-# Step 8: Test health endpoints
-print_info "Step 8: Testing health endpoints..."
+# Step 7: Test health endpoints
+print_info "Step 7: Testing health endpoints..."
 
 # Test each service health endpoint
 SERVICES=(
@@ -466,7 +345,7 @@ for service in "${SERVICES[@]}"; do
     fi
 done
 
-# Step 9: Summary
+# Step 8: Summary
 echo ""
 print_info "=========================================="
 print_info "Deployment completed successfully!"
