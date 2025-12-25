@@ -314,6 +314,9 @@ print_info "✓ Dependencies installed"
 
 # Build the project
 print_info "Building project..."
+# Clean old build output for merchant-onboarding-service
+$SSH_CMD "cd $SERVER_APP_DIR && rm -rf services/merchant-onboarding-service/dist" || true
+
 $SSH_CMD "cd $SERVER_APP_DIR && npm run build" || {
     print_error "Build failed"
     exit 1
