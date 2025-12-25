@@ -321,7 +321,99 @@ $SSH_CMD "cd $SERVER_APP_DIR && npm run build" || {
 
 print_info "✓ Project built successfully"
 
-# Step 7: Summary
+# Step 6.5: Ensure .env file exists on server
+print_info "Checking for .env file on server..."
+if ! $SSH_CMD "[ -f $SERVER_APP_DIR/.env ]"; then
+    print_warn ".env file not found on server. Creating from template..."
+    print_warn "Please ensure DATABASE_URL and other environment variables are set correctly."
+    $SSH_CMD "cd $SERVER_APP_DIR && touch .env"
+    print_warn "You may need to manually configure .env file on the server with database credentials."
+else
+    print_info "✓ .env file exists on server"
+fi
+
+# Step 7: Setup PM2 and start services
+print_info "Step 7: Setting up PM2 and starting services..."
+
+# Check if PM2 is installed
+if ! $SSH_CMD "command -v pm2 >/dev/null 2>&1"; then
+    print_info "Installing PM2..."
+    $SSH_CMD "npm install -g pm2"
+    print_info "✓ PM2 installed"
+else
+    print_info "✓ PM2 is already installed"
+fi
+
+# Stop existing PM2 processes if any
+print_info "Stopping existing services..."
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 delete all 2>/dev/null || true"
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 kill 2>/dev/null || true"
+
+# Start services with PM2
+print_info "Starting services with PM2..."
+
+# Start Merchant Onboarding Service (port 3001)
+$SSH_CMD "cd $SERVER_APP_DIR && NODE_ENV=production pm2 start services/merchant-onboarding-service/dist/index.js --name merchant-onboarding --cwd $SERVER_APP_DIR/services/merchant-onboarding-service --env production" || {
+    print_error "Failed to start merchant-onboarding service"
+}
+
+# Start Payment Processing Service (port 3002)
+$SSH_CMD "cd $SERVER_APP_DIR && NODE_ENV=production pm2 start services/payment-processing-service/dist/index.js --name payment-processing --cwd $SERVER_APP_DIR/services/payment-processing-service --env production" || {
+    print_error "Failed to start payment-processing service"
+}
+
+# Start Transaction Monitoring Service (port 3003)
+$SSH_CMD "cd $SERVER_APP_DIR && NODE_ENV=production pm2 start services/transaction-monitoring-service/dist/index.js --name transaction-monitoring --cwd $SERVER_APP_DIR/services/transaction-monitoring-service --env production" || {
+    print_error "Failed to start transaction-monitoring service"
+}
+
+# Start Settlement Reporting Service (port 3004)
+$SSH_CMD "cd $SERVER_APP_DIR && NODE_ENV=production pm2 start services/settlement-reporting-service/dist/index.js --name settlement-reporting --cwd $SERVER_APP_DIR/services/settlement-reporting-service --env production" || {
+    print_error "Failed to start settlement-reporting service"
+}
+
+# Save PM2 configuration
+print_info "Saving PM2 configuration..."
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 save"
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 startup 2>/dev/null || true"
+
+# Show PM2 status
+print_info "PM2 Status:"
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 list"
+
+# Step 8: Test health endpoints
+print_info "Step 8: Testing health endpoints..."
+sleep 3  # Wait for services to start
+
+# Test each service health endpoint
+SERVICES=(
+    "merchant-onboarding:3001"
+    "payment-processing:3002"
+    "transaction-monitoring:3003"
+    "settlement-reporting:3004"
+)
+
+HEALTH_CHECK_FAILED=0
+
+for service in "${SERVICES[@]}"; do
+    SERVICE_NAME=$(echo $service | cut -d':' -f1)
+    PORT=$(echo $service | cut -d':' -f2)
+    
+    print_info "Testing $SERVICE_NAME health endpoint (port $PORT)..."
+    HEALTH_RESPONSE=$($SSH_CMD "curl -s -o /dev/null -w '%{http_code}' http://localhost:$PORT/health || echo '000'")
+    
+    if [ "$HEALTH_RESPONSE" = "200" ]; then
+        print_info "✓ $SERVICE_NAME is healthy (HTTP $HEALTH_RESPONSE)"
+        # Get full response
+        HEALTH_BODY=$($SSH_CMD "curl -s http://localhost:$PORT/health")
+        print_info "  Response: $HEALTH_BODY"
+    else
+        print_error "✗ $SERVICE_NAME health check failed (HTTP $HEALTH_RESPONSE)"
+        HEALTH_CHECK_FAILED=1
+    fi
+done
+
+# Step 9: Summary
 echo ""
 print_info "=========================================="
 print_info "Deployment completed successfully!"
@@ -331,9 +423,32 @@ print_info "Branch: $CURRENT_BRANCH"
 print_info "Server: $SERVER_USER@$SERVER_IP"
 print_info "App Directory: $SERVER_APP_DIR"
 echo ""
-print_info "Next steps:"
-print_info "1. SSH to server: ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP"
-print_info "2. Navigate to: cd $SERVER_APP_DIR"
-print_info "3. Start services: npm run dev (or configure PM2/systemd)"
+print_info "Services are running with PM2"
+print_info ""
+print_info "Service URLs:"
+print_info "  - Merchant Onboarding: http://$SERVER_IP:3001/health"
+print_info "  - Payment Processing: http://$SERVER_IP:3002/health"
+print_info "  - Transaction Monitoring: http://$SERVER_IP:3003/health"
+print_info "  - Settlement Reporting: http://$SERVER_IP:3004/health"
+print_info ""
+print_info "API Documentation (Swagger):"
+print_info "  - Merchant Onboarding: http://$SERVER_IP:3001/api-docs"
+print_info "  - Payment Processing: http://$SERVER_IP:3002/api-docs"
+print_info "  - Transaction Monitoring: http://$SERVER_IP:3003/api-docs"
+print_info "  - Settlement Reporting: http://$SERVER_IP:3004/api-docs"
+print_info ""
+print_info "PM2 Commands:"
+print_info "  - View status: ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 list'"
+print_info "  - View logs: ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 logs'"
+print_info "  - Restart all: ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 restart all'"
+echo ""
+
+if [ $HEALTH_CHECK_FAILED -eq 1 ]; then
+    print_warn "Some health checks failed. Please check PM2 logs:"
+    print_warn "  ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 logs'"
+    exit 1
+else
+    print_info "✓ All health checks passed!"
+fi
 echo ""
 
