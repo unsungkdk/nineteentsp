@@ -1,0 +1,77 @@
+// This is your Prisma schema file for Merchant Onboarding Service
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MerchantsMaster {
+  id                   Int       @id @default(autoincrement())
+  name                 String    @db.VarChar(2048)
+  email                String    @unique @db.VarChar(255)
+  mobile               String    @db.VarChar(20)
+  state                String?   @db.VarChar(100)
+  kycVerified          Boolean   @default(false) @map("kyc_verified")
+  isActive             Boolean   @default(true) @map("is_active")
+  isSettlementActive   Boolean   @default(false) @map("is_settlement_active")
+  nineteenMerchantId   String?   @unique @map("nineteen_merchant_id") @db.VarChar(255)
+  password             String    @db.VarChar(255)
+  tpin                 String?   @db.VarChar(10)
+  is2faActive          Boolean   @default(false) @map("is_2fa_active")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  otps                 MerchantOtp[]
+  accessLogs           MerchantAccessLog[]
+
+  @@index([email], name: "idx_merchants_email")
+  @@index([isActive], name: "idx_merchants_is_active")
+  @@index([mobile], name: "idx_merchants_mobile")
+  @@index([nineteenMerchantId], name: "idx_merchants_nineteen_merchant_id")
+  @@map("merchants_master")
+}
+
+model MerchantOtp {
+  id         Int       @id @default(autoincrement())
+  email      String    @db.VarChar(255)
+  otp        String    @db.VarChar(10)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  isUsed     Boolean   @default(false) @map("is_used")
+  otpType    String    @default("email") @map("otp_type") @db.VarChar(20)
+  mobile     String?   @db.VarChar(20)
+
+  // Relations
+  merchant   MerchantsMaster @relation(fields: [email], references: [email], onDelete: Cascade)
+
+  @@index([createdAt], name: "idx_merchant_otps_created_at")
+  @@index([email], name: "idx_merchant_otps_email")
+  @@index([email, otp], name: "idx_merchant_otps_email_otp")
+  @@index([mobile], name: "idx_merchant_otps_mobile")
+  @@index([otpType], name: "idx_merchant_otps_otp_type")
+  @@check([otpType], name: "check_otp_type", expr: "otp_type IN ('email', 'mobile', 'sms')")
+  @@map("merchant_otps")
+}
+
+model MerchantAccessLog {
+  id                Int       @id @default(autoincrement())
+  merchantId        String?   @map("merchant_id") @db.VarChar(255)
+  action            String    @db.VarChar(100)
+  ipAddress         String?   @map("ip_address") @db.VarChar(45)
+  userAgent         String?   @map("user_agent") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  merchant          MerchantsMaster? @relation(fields: [merchantId], references: [nineteenMerchantId], onDelete: Cascade)
+
+  @@index([merchantId], name: "idx_merchant_access_logs_merchant_id")
+  @@index([createdAt], name: "idx_merchant_access_logs_created_at")
+  @@map("merchant_access_logs")
+}
+

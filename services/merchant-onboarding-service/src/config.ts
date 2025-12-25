@@ -14,7 +14,7 @@ export const config = {
   },
   jwt: {
     secret: process.env.JWT_SECRET || '',
-    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+    expiresIn: process.env.JWT_EXPIRES_IN || '10m', // 10 minutes for sliding session
   },
   surepass: {
     apiKey: process.env.SUREPASS_API_KEY || '',

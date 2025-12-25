@@ -34,7 +34,11 @@ app.register(swaggerUi, {
   routePrefix: '/api-docs',
 });
 
-// Register your routes here
+// Register routes
+import { authRoutes } from './routes/auth.routes';
+import { merchantRoutes } from './routes/merchant.routes';
+app.register(authRoutes);
+app.register(merchantRoutes);
 
 // Health check
 app.get('/health', async () => {
