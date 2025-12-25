@@ -1,0 +1,37 @@
+{
+  "name": "@tsp/merchant-onboarding-service",
+  "version": "1.0.0",
+  "description": "Merchant Onboarding Service - KYB/KYC verification",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@tsp/common": "*",
+    "@tsp/types": "*",
+    "@prisma/client": "^5.7.1",
+    "fastify": "^4.24.3",
+    "fastify-swagger": "^5.0.0",
+    "fastify-cors": "^8.4.0",
+    "zod": "^3.22.4",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.1",
+    "eslint": "^8.54.0",
+    "prisma": "^5.7.1",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3"
+  }
+}
+
