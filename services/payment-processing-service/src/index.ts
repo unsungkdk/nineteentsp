@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import swagger from 'fastify-swagger';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { config } from './config';
 import { logger } from '@tsp/common';
 
@@ -14,19 +15,23 @@ app.register(cors, {
 });
 
 app.register(swagger, {
-  routePrefix: '/api-docs',
-  swagger: {
+  openapi: {
     info: {
       title: 'Payment Processing Service API',
       description: 'API for payment processing (Pay-in/Payout)',
       version: '1.0.0',
     },
-    host: `localhost:${config.port}`,
-    schemes: ['http', 'https'],
-    consumes: ['application/json'],
-    produces: ['application/json'],
+    servers: [
+      {
+        url: `http://localhost:${config.port}`,
+        description: 'Development server',
+      },
+    ],
   },
-  exposeRoute: true,
+});
+
+app.register(swaggerUi, {
+  routePrefix: '/api-docs',
 });
 
 // Register your routes here
