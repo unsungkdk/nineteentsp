@@ -5,7 +5,7 @@ import { config } from './config';
 import { logger } from '@tsp/common';
 
 const app = Fastify({
-  logger: logger as any,
+  logger: true, // Use Fastify's built-in logger
 });
 
 // Register plugins

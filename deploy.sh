@@ -321,7 +321,7 @@ $SSH_CMD "cd $SERVER_APP_DIR && npm run build" || {
 
 print_info "✓ Project built successfully"
 
-# Step 6.5: Ensure .env file exists on server
+# Step 6.5: Ensure .env file exists on server and copy to service directories
 print_info "Checking for .env file on server..."
 if ! $SSH_CMD "[ -f $SERVER_APP_DIR/.env ]"; then
     print_warn ".env file not found on server. Creating from template..."
@@ -330,6 +330,13 @@ if ! $SSH_CMD "[ -f $SERVER_APP_DIR/.env ]"; then
     print_warn "You may need to manually configure .env file on the server with database credentials."
 else
     print_info "✓ .env file exists on server"
+    # Copy .env to each service directory so dotenv.config() can find it
+    print_info "Copying .env to service directories..."
+    $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/merchant-onboarding-service/.env 2>/dev/null || true"
+    $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/payment-processing-service/.env 2>/dev/null || true"
+    $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/transaction-monitoring-service/.env 2>/dev/null || true"
+    $SSH_CMD "cp $SERVER_APP_DIR/.env $SERVER_APP_DIR/services/settlement-reporting-service/.env 2>/dev/null || true"
+    print_info "✓ .env files copied to service directories"
 fi
 
 # Step 7: Setup PM2 and start services
@@ -381,9 +388,27 @@ $SSH_CMD "cd $SERVER_APP_DIR && pm2 startup 2>/dev/null || true"
 print_info "PM2 Status:"
 $SSH_CMD "cd $SERVER_APP_DIR && pm2 list"
 
+# Wait a bit for services to start
+print_info "Waiting for services to start..."
+sleep 5
+
+# Show PM2 status again
+print_info "PM2 Status after startup:"
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 list"
+
+# Check PM2 logs for errors
+print_info "Checking PM2 logs for errors (last 30 lines)..."
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 logs --lines 30 --nostream --err" || true
+
+# Check if any services are errored
+ERRORED_SERVICES=$($SSH_CMD "cd $SERVER_APP_DIR && pm2 jlist | grep -o '\"status\":\"errored\"' | wc -l" || echo "0")
+if [ "$ERRORED_SERVICES" != "0" ] && [ "$ERRORED_SERVICES" != "" ]; then
+    print_error "Some services have errored. Showing detailed logs..."
+    $SSH_CMD "cd $SERVER_APP_DIR && pm2 logs --lines 50 --nostream" || true
+fi
+
 # Step 8: Test health endpoints
 print_info "Step 8: Testing health endpoints..."
-sleep 3  # Wait for services to start
 
 # Test each service health endpoint
 SERVICES=(
