@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import cors from 'fastify-cors';
+import cors from '@fastify/cors';
 import swagger from 'fastify-swagger';
 import { config } from './config';
 import { logger } from '@tsp/common';
