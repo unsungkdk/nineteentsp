@@ -353,22 +353,22 @@ $SSH_CMD "cd $SERVER_APP_DIR && pm2 kill 2>/dev/null || true"
 print_info "Starting services with PM2..."
 
 # Start Merchant Onboarding Service (port 3001)
-$SSH_CMD "cd $SERVER_APP_DIR && NODE_ENV=production pm2 start services/merchant-onboarding-service/dist/index.js --name merchant-onboarding --cwd $SERVER_APP_DIR/services/merchant-onboarding-service --env production" || {
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/merchant-onboarding-service/dist/index.js --name merchant-onboarding --cwd $SERVER_APP_DIR/services/merchant-onboarding-service" || {
     print_error "Failed to start merchant-onboarding service"
 }
 
 # Start Payment Processing Service (port 3002)
-$SSH_CMD "cd $SERVER_APP_DIR && NODE_ENV=production pm2 start services/payment-processing-service/dist/index.js --name payment-processing --cwd $SERVER_APP_DIR/services/payment-processing-service --env production" || {
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/payment-processing-service/dist/index.js --name payment-processing --cwd $SERVER_APP_DIR/services/payment-processing-service" || {
     print_error "Failed to start payment-processing service"
 }
 
 # Start Transaction Monitoring Service (port 3003)
-$SSH_CMD "cd $SERVER_APP_DIR && NODE_ENV=production pm2 start services/transaction-monitoring-service/dist/index.js --name transaction-monitoring --cwd $SERVER_APP_DIR/services/transaction-monitoring-service --env production" || {
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/transaction-monitoring-service/dist/index.js --name transaction-monitoring --cwd $SERVER_APP_DIR/services/transaction-monitoring-service" || {
     print_error "Failed to start transaction-monitoring service"
 }
 
 # Start Settlement Reporting Service (port 3004)
-$SSH_CMD "cd $SERVER_APP_DIR && NODE_ENV=production pm2 start services/settlement-reporting-service/dist/index.js --name settlement-reporting --cwd $SERVER_APP_DIR/services/settlement-reporting-service --env production" || {
+$SSH_CMD "cd $SERVER_APP_DIR && pm2 start $SERVER_APP_DIR/services/settlement-reporting-service/dist/index.js --name settlement-reporting --cwd $SERVER_APP_DIR/services/settlement-reporting-service" || {
     print_error "Failed to start settlement-reporting service"
 }
 
