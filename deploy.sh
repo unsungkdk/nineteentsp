@@ -102,13 +102,14 @@ print_info "✓ Code pushed to GitHub successfully"
 # Step 2: Deploy to server
 print_info "Step 2: Deploying to backend server ($SERVER_IP)..."
 
-# SSH command with key
-SSH_CMD="ssh -i $SERVER_SSH_KEY -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP"
+# SSH command (password-based, will prompt for password when needed)
+SSH_CMD="ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password,keyboard-interactive $SERVER_USER@$SERVER_IP"
 
-# Check server connection
-print_info "Checking server connection..."
-if ! $SSH_CMD "echo 'Connection successful'" >/dev/null 2>&1; then
-    print_error "Cannot connect to server. Please check SSH setup."
+# Check server connection (will prompt for password)
+print_info "Checking server connection (will prompt for password if needed)..."
+print_info "You may be prompted to enter the server password."
+if ! $SSH_CMD "echo 'Connection successful'"; then
+    print_error "Cannot connect to server. Please check SSH setup and password."
     exit 1
 fi
 
@@ -286,14 +287,14 @@ print_info "API Documentation (Swagger):"
 print_info "  - Merchant Onboarding: http://$SERVER_IP:3001/api-docs"
 print_info ""
 print_info "PM2 Commands:"
-print_info "  - View status: ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 list'"
-print_info "  - View logs: ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 logs'"
-print_info "  - Restart all: ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 restart all'"
+print_info "  - View status: ssh $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 list'"
+print_info "  - View logs: ssh $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 logs'"
+print_info "  - Restart all: ssh $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 restart all'"
 echo ""
 
 if [ $HEALTH_CHECK_FAILED -eq 1 ]; then
     print_warn "Some health checks failed. Please check PM2 logs:"
-    print_warn "  ssh -i $SERVER_SSH_KEY $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 logs'"
+    print_warn "  ssh $SERVER_USER@$SERVER_IP 'cd $SERVER_APP_DIR && pm2 logs'"
     exit 1
 else
     print_info "✓ All health checks passed!"
