@@ -14,7 +14,6 @@ NC='\033[0m' # No Color
 # Configuration
 SERVER_IP="64.227.171.110"
 SERVER_USER="root"
-SERVER_SSH_KEY="$HOME/.ssh/backend_server"
 SERVER_APP_DIR="/opt/tsp_nineteenpay_backend"
 GITHUB_REPO="git@github.com:unsungkdk/nineteentsp.git"
 
