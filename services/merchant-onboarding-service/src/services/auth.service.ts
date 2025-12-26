@@ -232,8 +232,16 @@ export const authService = {
 
     // Send OTP via appropriate channel
     if (input.otpType === 'email') {
-      await sendOtpEmail(input.email, otp, merchant.name);
+      logger.info(`[Auth Service] Sending OTP email to ${input.email} for merchant ${merchant.name}`);
+      try {
+        await sendOtpEmail(input.email, otp, merchant.name);
+        logger.info(`[Auth Service] OTP email sent successfully to ${input.email}`);
+      } catch (error: any) {
+        logger.error(`[Auth Service] Failed to send OTP email to ${input.email}:`, error);
+        throw error;
+      }
     } else if (input.otpType === 'mobile' || input.otpType === 'sms') {
+      logger.info(`[Auth Service] Sending OTP SMS to ${merchant.mobile}`);
       await sendOtpSms(merchant.mobile, otp);
     }
 

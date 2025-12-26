@@ -5,7 +5,14 @@ import { logger } from '@tsp/common';
 // Initialize Brevo API client
 const defaultClient = SibApiV3Sdk.ApiClient.instance;
 const apiKey = defaultClient.authentications['api-key'];
-apiKey.apiKey = config.brevo.apiKey;
+
+// Set API key and log initialization
+if (config.brevo.apiKey) {
+  apiKey.apiKey = config.brevo.apiKey;
+  logger.info(`[Email Service] Brevo API client initialized with API key (length: ${config.brevo.apiKey.length})`);
+} else {
+  logger.warn('[Email Service] Brevo API key not found in config. Email sending will be disabled.');
+}
 
 const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
@@ -13,11 +20,17 @@ const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
  * Send OTP email using Brevo
  */
 export const sendOtpEmail = async (email: string, otp: string, name?: string): Promise<void> => {
+  logger.info(`[Email Service] Starting OTP email send to ${email}`);
+  
   if (!config.brevo.apiKey) {
-    logger.warn('Brevo API key not configured. Email will not be sent.');
+    logger.warn('[Email Service] Brevo API key not configured. Email will not be sent.');
+    logger.warn(`[Email Service] BREVO_KEY environment variable is missing or empty`);
     console.log(`[Email] OTP ${otp} for ${email} (Brevo not configured)`);
     return;
   }
+
+  logger.info(`[Email Service] Brevo API key found (length: ${config.brevo.apiKey.length})`);
+  logger.info(`[Email Service] Sender: ${config.brevo.senderName} <${config.brevo.senderEmail}>`);
 
   try {
     const logoUrl = 'https://raw.githubusercontent.com/unsungkdk/nineteenpay/main/!9%20Light%20logo.png';
@@ -141,11 +154,34 @@ Support: support@nineteenpay.com
     };
     sendSmtpEmail.to = [{ email, name: name || email }];
 
-    await apiInstance.sendTransacEmail(sendSmtpEmail);
-    logger.info(`OTP email sent successfully to ${email}`);
+    logger.info(`[Email Service] Preparing to send email to ${email}`);
+    logger.info(`[Email Service] Email subject: ${sendSmtpEmail.subject}`);
+    logger.info(`[Email Service] Sender: ${sendSmtpEmail.sender?.name} <${sendSmtpEmail.sender?.email}>`);
+    logger.info(`[Email Service] Recipient: ${email}${name ? ` (${name})` : ''}`);
+    logger.info(`[Email Service] HTML content length: ${sendSmtpEmail.htmlContent?.length || 0} chars`);
+    logger.info(`[Email Service] Text content length: ${sendSmtpEmail.textContent?.length || 0} chars`);
+    
+    logger.info(`[Email Service] Calling Brevo API sendTransacEmail...`);
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    logger.info(`[Email Service] Email sent successfully to ${email}`);
+    logger.info(`[Email Service] Brevo API response: ${JSON.stringify(result, null, 2)}`);
   } catch (error: any) {
-    logger.error('Failed to send OTP email via Brevo:', error);
-    throw new Error(`Failed to send email: ${error.message || 'Unknown error'}`);
+    logger.error(`[Email Service] Failed to send OTP email via Brevo to ${email}`);
+    logger.error(`[Email Service] Error type: ${error?.constructor?.name || 'Unknown'}`);
+    logger.error(`[Email Service] Error message: ${error?.message || 'No message'}`);
+    logger.error(`[Email Service] Error stack: ${error?.stack || 'No stack trace'}`);
+    logger.error(`[Email Service] Full error object: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`);
+    
+    // Log Brevo-specific error details if available
+    if (error?.response) {
+      logger.error(`[Email Service] Brevo API response error: ${JSON.stringify(error.response)}`);
+    }
+    if (error?.body) {
+      logger.error(`[Email Service] Brevo API error body: ${JSON.stringify(error.body)}`);
+    }
+    
+    throw new Error(`Failed to send email: ${error?.message || 'Unknown error'}`);
   }
 };
 
