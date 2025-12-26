@@ -195,6 +195,15 @@ $SSH_CMD "cd $SERVER_APP_DIR/services/merchant-onboarding-service && npx prisma 
 }
 print_info "✓ Prisma client generated"
 
+# Push database schema (creates tables if they don't exist)
+print_info "Syncing database schema..."
+$SSH_CMD "cd $SERVER_APP_DIR/services/merchant-onboarding-service && npx prisma db push --accept-data-loss" || {
+    print_error "Failed to sync database schema"
+    print_warn "If tables already exist, you may need to run migrations manually"
+    exit 1
+}
+print_info "✓ Database schema synced"
+
 # Build the project
 print_info "Building project..."
 # Clean old build output for merchant-onboarding-service
