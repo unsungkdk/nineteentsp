@@ -23,6 +23,8 @@ model MerchantsMaster {
   password             String    @db.VarChar(255)
   tpin                 String?   @db.VarChar(10)
   is2faActive          Boolean   @default(false) @map("is_2fa_active")
+  isMobileVerified     Boolean   @default(false) @map("is_mobile_verified")
+  isEmailVerified      Boolean   @default(false) @map("is_email_verified")
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 

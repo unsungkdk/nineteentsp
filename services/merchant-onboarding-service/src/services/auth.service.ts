@@ -104,7 +104,7 @@ export const authService = {
     // Hash password
     const hashedPassword = await hashPassword(input.password);
 
-    // Create merchant
+    // Create merchant - account is inactive until both email and mobile are verified
     const merchant = await prisma.merchantsMaster.create({
       data: {
         name: input.name,
@@ -114,9 +114,11 @@ export const authService = {
         state: input.state,
         nineteenMerchantId,
         kycVerified: false,
-        isActive: true,
+        isActive: false, // Account inactive until both email and mobile are verified
         isSettlementActive: false,
         is2faActive: false,
+        isMobileVerified: false,
+        isEmailVerified: false,
       },
       select: {
         id: true,
@@ -126,6 +128,8 @@ export const authService = {
         name: true,
         kycVerified: true,
         isActive: true,
+        isMobileVerified: true,
+        isEmailVerified: true,
         createdAt: true,
       },
     });
@@ -149,15 +153,23 @@ export const authService = {
     // Find merchant by email
     const merchant = await prisma.merchantsMaster.findUnique({
       where: { email: input.email },
+      select: {
+        id: true,
+        email: true,
+        mobile: true,
+        password: true,
+        nineteenMerchantId: true,
+        name: true,
+        kycVerified: true,
+        isActive: true,
+        is2faActive: true,
+        isMobileVerified: true,
+        isEmailVerified: true,
+      },
     });
 
     if (!merchant) {
       throw new UnauthorizedError('Invalid email or password');
-    }
-
-    // Check if account is active
-    if (!merchant.isActive) {
-      throw new UnauthorizedError('Account is inactive. Please contact support.');
     }
 
     // Verify password
@@ -173,6 +185,9 @@ export const authService = {
         success: true,
         requiresOtp: true,
         message: 'OTP verification required',
+        isMobileVerified: merchant.isMobileVerified,
+        isEmailVerified: merchant.isEmailVerified,
+        isActive: merchant.isActive,
       };
     }
 
@@ -193,9 +208,12 @@ export const authService = {
         id: merchant.id,
         merchantId: merchant.nineteenMerchantId,
         email: merchant.email,
+        mobile: merchant.mobile,
         name: merchant.name,
         kycVerified: merchant.kycVerified,
         isActive: merchant.isActive,
+        isMobileVerified: merchant.isMobileVerified,
+        isEmailVerified: merchant.isEmailVerified,
       },
     };
   },
@@ -211,6 +229,32 @@ export const authService = {
 
     if (!merchant) {
       throw new NotFoundError('Merchant');
+    }
+
+    // Check if there's an active OTP (not expired, not used) created within the last 60 seconds
+    const sixtySecondsAgo = new Date();
+    sixtySecondsAgo.setSeconds(sixtySecondsAgo.getSeconds() - 60);
+
+    const activeOtp = await prisma.merchantOtp.findFirst({
+      where: {
+        email: input.email,
+        otpType: input.otpType,
+        isUsed: false,
+        expiresAt: {
+          gt: new Date(), // Not expired
+        },
+        createdAt: {
+          gte: sixtySecondsAgo, // Created within last 60 seconds
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (activeOtp) {
+      const secondsRemaining = Math.ceil((60 - (new Date().getTime() - activeOtp.createdAt.getTime()) / 1000));
+      throw new ValidationError(`Please wait ${secondsRemaining} seconds before requesting a new OTP`);
     }
 
     // Generate OTP
@@ -293,26 +337,64 @@ export const authService = {
       throw new NotFoundError('Merchant');
     }
 
+    // Update verification status based on OTP type
+    const updateData: any = {};
+    if (input.otpType === 'email') {
+      updateData.isEmailVerified = true;
+    } else if (input.otpType === 'mobile' || input.otpType === 'sms') {
+      updateData.isMobileVerified = true;
+    }
+
+    // Check if both email and mobile are verified (or will be after this update)
+    const willBeEmailVerified = input.otpType === 'email' ? true : merchant.isEmailVerified;
+    const willBeMobileVerified = (input.otpType === 'mobile' || input.otpType === 'sms') ? true : merchant.isMobileVerified;
+
+    // Activate account if both verifications are complete
+    if (willBeEmailVerified && willBeMobileVerified) {
+      updateData.isActive = true;
+      logger.info(`[Auth Service] Both email and mobile verified for ${input.email}. Activating account.`);
+    }
+
+    // Update merchant verification status
+    const updatedMerchant = await prisma.merchantsMaster.update({
+      where: { email: input.email },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        mobile: true,
+        nineteenMerchantId: true,
+        name: true,
+        kycVerified: true,
+        isActive: true,
+        isMobileVerified: true,
+        isEmailVerified: true,
+      },
+    });
+
     // Generate JWT token
     const token = generateToken({
-      userId: merchant.id.toString(),
-      merchantId: merchant.nineteenMerchantId || '',
+      userId: updatedMerchant.id.toString(),
+      merchantId: updatedMerchant.nineteenMerchantId || '',
       role: 'merchant',
-      email: merchant.email,
-      kycVerified: merchant.kycVerified,
-      isActive: merchant.isActive,
+      email: updatedMerchant.email,
+      kycVerified: updatedMerchant.kycVerified,
+      isActive: updatedMerchant.isActive,
     });
 
     return {
       success: true,
       token,
       merchant: {
-        id: merchant.id,
-        merchantId: merchant.nineteenMerchantId,
-        email: merchant.email,
-        name: merchant.name,
-        kycVerified: merchant.kycVerified,
-        isActive: merchant.isActive,
+        id: updatedMerchant.id,
+        merchantId: updatedMerchant.nineteenMerchantId,
+        email: updatedMerchant.email,
+        mobile: updatedMerchant.mobile,
+        name: updatedMerchant.name,
+        kycVerified: updatedMerchant.kycVerified,
+        isActive: updatedMerchant.isActive,
+        isMobileVerified: updatedMerchant.isMobileVerified,
+        isEmailVerified: updatedMerchant.isEmailVerified,
       },
     };
   },
