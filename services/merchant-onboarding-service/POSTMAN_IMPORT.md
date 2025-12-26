@@ -95,11 +95,19 @@ GET {{base_url}}/api/merchant/profile
 Authorization: Bearer {{token}}
 ```
 
-## OpenAPI Spec URLs
+## API Documentation URLs
 
+### OpenAPI Spec (JSON)
 - **Production:** http://64.227.171.110:3001/api-docs/json
 - **Local Dev:** http://localhost:3001/api-docs/json
-- **Swagger UI:** http://64.227.171.110:3001/api-docs
+
+### Swagger UI
+- **Production:** http://64.227.171.110:3001/api-docs
+- **Local Dev:** http://localhost:3001/api-docs
+
+### ReDoc
+- **Production:** http://64.227.171.110:3001/redoc
+- **Local Dev:** http://localhost:3001/redoc
 
 ## Notes
 

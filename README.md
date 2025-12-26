@@ -120,8 +120,14 @@ cd services/merchant-onboarding-service && npm test
 
 ## API Documentation
 
-API documentation is available via Swagger UI:
-- Merchant Onboarding: http://localhost:3001/api-docs
+API documentation is available via Swagger UI and ReDoc:
+
+### Merchant Onboarding Service
+- **Swagger UI:** http://localhost:3001/api-docs (Production: http://64.227.171.110:3001/api-docs)
+- **ReDoc:** http://localhost:3001/redoc (Production: http://64.227.171.110:3001/redoc)
+- **OpenAPI JSON:** http://localhost:3001/api-docs/json (Production: http://64.227.171.110:3001/api-docs/json)
+
+### Other Services
 - Payment Processing: http://localhost:3002/api-docs
 - Transaction Monitoring: http://localhost:3003/api-docs
 - Settlement & Reporting: http://localhost:3004/api-docs
