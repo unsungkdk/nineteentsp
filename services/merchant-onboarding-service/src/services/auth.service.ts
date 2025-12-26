@@ -76,7 +76,7 @@ export const authService = {
     }
 
     // Generate unique 8-digit numeric merchant ID
-    let nineteenMerchantId: string;
+    let nineteenMerchantId: string = '';
     let isUnique = false;
     let attempts = 0;
     const maxAttempts = 10;
@@ -97,7 +97,7 @@ export const authService = {
       attempts++;
     }
     
-    if (!isUnique) {
+    if (!isUnique || !nineteenMerchantId) {
       throw new Error('Failed to generate unique merchant ID after multiple attempts');
     }
 
