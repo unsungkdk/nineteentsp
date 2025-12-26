@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { hashPassword, comparePassword, generateToken, JWTPayload } from '@tsp/common';
+import { hashPassword, comparePassword, generateToken, JWTPayload, logger } from '@tsp/common';
 import { ValidationError, NotFoundError, UnauthorizedError, ConflictError } from '@tsp/common';
 import { sendOtpEmail as sendBrevoEmail } from './email.service';
 
