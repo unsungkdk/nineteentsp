@@ -26,6 +26,10 @@ app.register(swagger, {
         url: `http://localhost:${config.port}`,
         description: 'Development server',
       },
+      {
+        url: 'http://64.227.171.110:3001',
+        description: 'Production server',
+      },
     ],
     components: {
       securitySchemes: {
