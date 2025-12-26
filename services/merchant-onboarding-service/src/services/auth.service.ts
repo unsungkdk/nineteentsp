@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { hashPassword, comparePassword, generateToken, JWTPayload } from '@tsp/common';
 import { ValidationError, NotFoundError, UnauthorizedError, ConflictError } from '@tsp/common';
+import { sendOtpEmail as sendBrevoEmail } from './email.service';
 
 const prisma = new PrismaClient();
 
@@ -45,12 +46,10 @@ const sendOtpSms = async (mobile: string, otp: string): Promise<void> => {
 };
 
 /**
- * Send OTP via Email using Brevo (placeholder - will be replaced with actual API)
+ * Send OTP via Email using Brevo
  */
-const sendOtpEmail = async (email: string, otp: string): Promise<void> => {
-  // TODO: Integrate with Brevo API when provided
-  console.log(`[Email] Sending OTP ${otp} to ${email}`);
-  // Placeholder: await brevoApi.sendEmail(email, 'OTP Verification', `Your OTP is ${otp}`);
+const sendOtpEmail = async (email: string, otp: string, name?: string): Promise<void> => {
+  await sendBrevoEmail(email, otp, name);
 };
 
 export const authService = {
@@ -76,8 +75,31 @@ export const authService = {
       throw new ConflictError('Mobile number already registered');
     }
 
-    // Generate unique merchant ID
-    const nineteenMerchantId = `MERCH${Date.now()}${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    // Generate unique 8-digit numeric merchant ID
+    let nineteenMerchantId: string;
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    while (!isUnique && attempts < maxAttempts) {
+      // Generate 8-digit number (10000000 to 99999999)
+      const randomId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      
+      // Check if ID already exists
+      const existing = await prisma.merchantsMaster.findUnique({
+        where: { nineteenMerchantId: randomId },
+      });
+      
+      if (!existing) {
+        nineteenMerchantId = randomId;
+        isUnique = true;
+      }
+      attempts++;
+    }
+    
+    if (!isUnique) {
+      throw new Error('Failed to generate unique merchant ID after multiple attempts');
+    }
 
     // Hash password
     const hashedPassword = await hashPassword(input.password);
@@ -210,7 +232,7 @@ export const authService = {
 
     // Send OTP via appropriate channel
     if (input.otpType === 'email') {
-      await sendOtpEmail(input.email, otp);
+      await sendOtpEmail(input.email, otp, merchant.name);
     } else if (input.otpType === 'mobile' || input.otpType === 'sms') {
       await sendOtpSms(merchant.mobile, otp);
     }

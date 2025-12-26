@@ -26,5 +26,10 @@ export const config = {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
+  brevo: {
+    apiKey: process.env.BREVO_KEY || '',
+    senderEmail: process.env.BREVO_SENDER_EMAIL || 'noreply@nineteenpay.com',
+    senderName: process.env.BREVO_SENDER_NAME || 'NineteenPay',
+  },
 };
 
