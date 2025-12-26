@@ -55,7 +55,6 @@ model MerchantOtp {
   @@index([email, otp], name: "idx_merchant_otps_email_otp")
   @@index([mobile], name: "idx_merchant_otps_mobile")
   @@index([otpType], name: "idx_merchant_otps_otp_type")
-  @@check([otpType], name: "check_otp_type", expr: "otp_type IN ('email', 'mobile', 'sms')")
   @@map("merchant_otps")
 }
 

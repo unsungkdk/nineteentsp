@@ -102,18 +102,34 @@ print_info "✓ Code pushed to GitHub successfully"
 # Step 2: Deploy to server
 print_info "Step 2: Deploying to backend server ($SERVER_IP)..."
 
-# SSH command (password-based, will prompt for password when needed)
-SSH_CMD="ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password,keyboard-interactive $SERVER_USER@$SERVER_IP"
+# Setup SSH ControlMaster for connection reuse (reduces password prompts)
+SSH_CONTROL_DIR="$HOME/.ssh/control"
+mkdir -p "$SSH_CONTROL_DIR"
+SSH_CONTROL_PATH="$SSH_CONTROL_DIR/%r@%h:%p"
 
-# Check server connection (will prompt for password)
-print_info "Checking server connection (will prompt for password if needed)..."
-print_info "You may be prompted to enter the server password."
+# SSH command with ControlMaster for connection reuse
+SSH_CMD="ssh -o StrictHostKeyChecking=no \
+         -o PreferredAuthentications=password,keyboard-interactive \
+         -o ControlMaster=auto \
+         -o ControlPath=\"$SSH_CONTROL_PATH\" \
+         -o ControlPersist=300 \
+         $SERVER_USER@$SERVER_IP"
+
+# Cleanup function to close SSH connection
+cleanup_ssh() {
+    ssh -O exit -o ControlPath="$SSH_CONTROL_PATH" $SERVER_USER@$SERVER_IP 2>/dev/null || true
+}
+trap cleanup_ssh EXIT
+
+# Check server connection (will prompt for password once)
+print_info "Checking server connection (will prompt for password once)..."
+print_info "You will be prompted to enter the server password. It will be reused for subsequent connections."
 if ! $SSH_CMD "echo 'Connection successful'"; then
     print_error "Cannot connect to server. Please check SSH setup and password."
     exit 1
 fi
 
-print_info "✓ Server connection successful"
+print_info "✓ Server connection successful (password cached for this session)"
 
 # Step 3: Quick GitHub SSH test (skip setup if already working)
 print_info "Step 3: Testing GitHub SSH connection..."
