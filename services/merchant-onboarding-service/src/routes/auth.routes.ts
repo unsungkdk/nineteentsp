@@ -161,7 +161,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           required: ['email', 'otp', 'otpType'],
           properties: {
             email: { type: 'string', format: 'email' },
-            otp: { type: 'string', length: 6 },
+            otp: { type: 'string', minLength: 6, maxLength: 6 },
             otpType: { type: 'string', enum: ['email', 'mobile', 'sms'] },
           },
         },
