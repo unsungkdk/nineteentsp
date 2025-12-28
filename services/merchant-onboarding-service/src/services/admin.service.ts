@@ -279,7 +279,7 @@ export const adminService = {
     // Always construct profile object with all fields explicitly set
     // This ensures all fields are returned even if they're null or if profile doesn't exist
     // Handle both cases: profile is null (doesn't exist) or profile is {} (empty object from Prisma)
-    const profileData = merchant.profile || {};
+    const profileData: any = merchant.profile || {};
     
     const merchantWithProfile = {
       ...merchant,
