@@ -276,32 +276,35 @@ export const adminService = {
       throw new NotFoundError('Merchant');
     }
 
-    // Ensure profile object has all fields explicitly set (even if null)
-    // This prevents Prisma from returning an empty object when all fields are null
+    // Always construct profile object with all fields explicitly set
+    // This ensures all fields are returned even if they're null or if profile doesn't exist
+    // Handle both cases: profile is null (doesn't exist) or profile is {} (empty object from Prisma)
+    const profileData = merchant.profile || {};
+    
     const merchantWithProfile = {
       ...merchant,
-      profile: merchant.profile ? {
-        typeOfEntity: merchant.profile.typeOfEntity ?? null,
-        pan: merchant.profile.pan ?? null,
-        incorporationDate: merchant.profile.incorporationDate ?? null,
-        gst: merchant.profile.gst ?? null,
-        businessAddress: merchant.profile.businessAddress ?? null,
-        registrationNumber: merchant.profile.registrationNumber ?? null,
-        mccCodes: merchant.profile.mccCodes ?? null,
-        directorDetails: merchant.profile.directorDetails ?? null,
-        shareholdingPatterns: merchant.profile.shareholdingPatterns ?? null,
-        uboDetails: merchant.profile.uboDetails ?? null,
-        accountDetails: merchant.profile.accountDetails ?? null,
-        whitelistedIps: merchant.profile.whitelistedIps ?? null,
-        apDetails: merchant.profile.apDetails ?? null,
-        averageTicketSize: merchant.profile.averageTicketSize ?? null,
-        averageVolume: merchant.profile.averageVolume ?? null,
-        expectedTurnover: merchant.profile.expectedTurnover ?? null,
-        turnoverDoneTillDate: merchant.profile.turnoverDoneTillDate ?? null,
-        numberOfTransactionsDone: merchant.profile.numberOfTransactionsDone ?? null,
-        createdAt: merchant.profile.createdAt ?? null,
-        updatedAt: merchant.profile.updatedAt ?? null,
-      } : null,
+      profile: {
+        typeOfEntity: profileData.typeOfEntity ?? null,
+        pan: profileData.pan ?? null,
+        incorporationDate: profileData.incorporationDate ?? null,
+        gst: profileData.gst ?? null,
+        businessAddress: profileData.businessAddress ?? null,
+        registrationNumber: profileData.registrationNumber ?? null,
+        mccCodes: profileData.mccCodes ?? null,
+        directorDetails: profileData.directorDetails ?? null,
+        shareholdingPatterns: profileData.shareholdingPatterns ?? null,
+        uboDetails: profileData.uboDetails ?? null,
+        accountDetails: profileData.accountDetails ?? null,
+        whitelistedIps: profileData.whitelistedIps ?? null,
+        apDetails: profileData.apDetails ?? null,
+        averageTicketSize: profileData.averageTicketSize != null ? Number(profileData.averageTicketSize) : null,
+        averageVolume: profileData.averageVolume != null ? Number(profileData.averageVolume) : null,
+        expectedTurnover: profileData.expectedTurnover != null ? Number(profileData.expectedTurnover) : null,
+        turnoverDoneTillDate: profileData.turnoverDoneTillDate != null ? Number(profileData.turnoverDoneTillDate) : null,
+        numberOfTransactionsDone: profileData.numberOfTransactionsDone ?? 0,
+        createdAt: profileData.createdAt ?? null,
+        updatedAt: profileData.updatedAt ?? null,
+      },
     };
 
     return {
