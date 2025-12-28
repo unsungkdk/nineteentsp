@@ -373,11 +373,6 @@ export const authService = {
 
     // This should never happen - all cases should be handled above
     // If we reach here, it's an unexpected state
-    const mfaEnabled = merchant.is2faActive;
-    const phoneVerified = merchant.isMobileVerified;
-    const emailVerified = merchant.isEmailVerified;
-    const accountActive = merchant.isActive;
-    
     logger.error(`[Auth Service] Unexpected state reached for ${input.email}. Account active: ${accountActive}, MFA enabled: ${mfaEnabled}, Email verified: ${emailVerified}, Phone verified: ${phoneVerified}`);
     throw new Error('Unexpected authentication state. Please contact support.');
   },
