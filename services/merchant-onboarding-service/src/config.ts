@@ -34,5 +34,13 @@ export const config = {
     senderEmail: process.env.BREVO_SENDER_EMAIL || 'noreply@nineteenpay.com',
     senderName: process.env.BREVO_SENDER_NAME || 'NineteenPay',
   },
+  sms: {
+    apiKey: process.env.SMS_API_KEY || '83374b920b1df7d6678d313532cfc671',
+    apiUrl: process.env.SMS_API_URL || 'https://sms.par-ken.com/api/smsapi',
+    sender: process.env.SMS_SENDER || 'INTTEE',
+    route: process.env.SMS_ROUTE || '1',
+    type: process.env.SMS_TYPE || '1',
+    templateId: process.env.SMS_TEMPLATE_ID || '1707176674769771409',
+  },
 };
 

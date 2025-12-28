@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { hashPassword, comparePassword, generateToken, JWTPayload, logger } from '@tsp/common';
 import { ValidationError, NotFoundError, UnauthorizedError, ConflictError } from '@tsp/common';
 import { sendOtpEmail as sendBrevoEmail } from './email.service';
+import { sendOtpSms as sendSmsOtp } from './sms.service';
 
 const prisma = new PrismaClient();
 
@@ -36,14 +37,6 @@ const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-/**
- * Send OTP via SMS (placeholder - will be replaced with actual API)
- */
-const sendOtpSms = async (mobile: string, otp: string): Promise<void> => {
-  // TODO: Integrate with SMS API when provided
-  console.log(`[SMS] Sending OTP ${otp} to ${mobile}`);
-  // Placeholder: await smsApi.send(mobile, `Your OTP is ${otp}`);
-};
 
 /**
  * Send OTP via Email using Brevo
@@ -285,8 +278,14 @@ export const authService = {
         throw error;
       }
     } else if (input.otpType === 'mobile' || input.otpType === 'sms') {
-      logger.info(`[Auth Service] Sending OTP SMS to ${merchant.mobile}`);
-      await sendOtpSms(merchant.mobile, otp);
+      logger.info(`[Auth Service] Sending OTP SMS to ${merchant.mobile} for merchant ${merchant.name}`);
+      try {
+        await sendSmsOtp(merchant.mobile, otp, merchant.name);
+        logger.info(`[Auth Service] OTP SMS sent successfully to ${merchant.mobile}`);
+      } catch (error: any) {
+        logger.error(`[Auth Service] Failed to send OTP SMS to ${merchant.mobile}:`, error);
+        throw error;
+      }
     }
 
     return {

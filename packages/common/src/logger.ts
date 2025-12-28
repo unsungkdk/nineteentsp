@@ -37,12 +37,12 @@ export const logger = winston.createLogger({
 });
 
 // Always add console transport for PM2 visibility
-logger.add(
-  new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    ),
-  })
-);
+  logger.add(
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    })
+  );
 
