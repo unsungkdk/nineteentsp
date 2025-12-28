@@ -28,8 +28,9 @@ export const sendOtpSms = async (mobile: string, otp: string, name?: string): Pr
     const truncatedName = name ? truncateName(name) : '';
     const merchantName = truncatedName || 'User';
 
-    // Construct SMS message
-    const message = `Hi ${merchantName} your OTP for account verification on Nineteen Pay is ${otp} Please do not share this OTP with anyone. – Team Nineteen Pay`;
+    // Construct SMS message matching template format
+    // Template: Hi {#var#}, your OTP for account verification on Nineteen Pay is {#var#}. Please do not share this OTP with anyone. – Team INETEEN PAY
+    const message = `Hi ${merchantName}, your OTP for account verification on ineteen Pay is ${otp}. Please do not share this OTP with anyone. – Team INETEEN PAY`;
 
     // Construct API URL with query parameters
     const params = new URLSearchParams({
