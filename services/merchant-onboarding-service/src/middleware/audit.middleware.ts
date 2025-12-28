@@ -166,6 +166,23 @@ export const auditMiddlewareOnResponse = async (
   // Determine action type
   const actionType = getActionTypeFromPath(requestPath, request.method) || undefined;
 
+  // Extract location from request body for sign-in requests
+  const metadata: any = {
+    url: request.url,
+  };
+
+  // Add location to metadata for sign-in requests (location is mandatory for merchant sign-in)
+  if (actionType === 'signin' && request.body && typeof request.body === 'object') {
+    const body = request.body as any;
+    if (body.latitude !== undefined && body.longitude !== undefined && body.location) {
+      metadata.location = {
+        latitude: body.latitude,
+        longitude: body.longitude,
+        location: body.location, // City/state name
+      };
+    }
+  }
+
   // Create audit log entry (non-blocking - add to queue)
   const auditLog: AuditLogData = {
     sessionId,
@@ -182,9 +199,7 @@ export const auditMiddlewareOnResponse = async (
     responseTimeMs: responseTime,
     routeName: (request.routerPath || request.url.split('?')[0]) || undefined,
     actionType,
-    metadata: {
-      url: request.url,
-    },
+    metadata,
   };
 
   // Add to queue (non-blocking)

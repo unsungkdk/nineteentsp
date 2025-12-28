@@ -53,6 +53,20 @@ export interface AdminPasswordResetVerifyInput {
   newPassword: string;
 }
 
+export interface GetAuditLogsInput {
+  page?: number;
+  limit?: number;
+  merchantId?: string;
+  userId?: number;
+  email?: string;
+  actionType?: string;
+  ipAddress?: string;
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
+  responseStatus?: number;
+  sessionId?: string;
+}
+
 /**
  * Generate a 6-digit OTP
  */
@@ -526,6 +540,176 @@ export const adminService = {
       success: true,
       message: 'Password has been reset successfully. Please sign in with your new password.',
     };
+  },
+
+  /**
+   * Get merchant audit logs with filters
+   */
+  async getAuditLogs(input: GetAuditLogsInput) {
+    const page = input.page || 1;
+    const limit = Math.min(input.limit || 50, 100); // Max 100 per page
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    // Filter by merchant ID
+    if (input.merchantId) {
+      where.merchantId = input.merchantId;
+    }
+
+    // Filter by user ID
+    if (input.userId) {
+      where.userId = input.userId;
+    }
+
+    // Filter by email
+    if (input.email) {
+      where.email = { contains: input.email, mode: 'insensitive' };
+    }
+
+    // Filter by action type
+    if (input.actionType) {
+      where.actionType = input.actionType;
+    }
+
+    // Filter by IP address
+    if (input.ipAddress) {
+      where.ipAddress = input.ipAddress;
+    }
+
+    // Filter by session ID
+    if (input.sessionId) {
+      where.sessionId = input.sessionId;
+    }
+
+    // Filter by response status
+    if (input.responseStatus !== undefined) {
+      where.responseStatus = input.responseStatus;
+    }
+
+    // Filter by date range
+    if (input.startDate || input.endDate) {
+      where.createdAt = {};
+      if (input.startDate) {
+        where.createdAt.gte = new Date(input.startDate);
+      }
+      if (input.endDate) {
+        // Add 1 day to include the entire end date
+        const endDate = new Date(input.endDate);
+        endDate.setDate(endDate.getDate() + 1);
+        where.createdAt.lt = endDate;
+      }
+    }
+
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      logs,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  },
+
+  /**
+   * Export audit logs as standardized .txt file
+   */
+  async exportAuditLogs(input: GetAuditLogsInput): Promise<string> {
+    const limit = Math.min(input.limit || 10000, 50000); // Max 50000 for export
+
+    const where: any = {};
+
+    // Apply same filters as getAuditLogs
+    if (input.merchantId) where.merchantId = input.merchantId;
+    if (input.userId) where.userId = input.userId;
+    if (input.email) where.email = { contains: input.email, mode: 'insensitive' };
+    if (input.actionType) where.actionType = input.actionType;
+    if (input.ipAddress) where.ipAddress = input.ipAddress;
+    if (input.sessionId) where.sessionId = input.sessionId;
+    if (input.responseStatus !== undefined) where.responseStatus = input.responseStatus;
+
+    if (input.startDate || input.endDate) {
+      where.createdAt = {};
+      if (input.startDate) where.createdAt.gte = new Date(input.startDate);
+      if (input.endDate) {
+        const endDate = new Date(input.endDate);
+        endDate.setDate(endDate.getDate() + 1);
+        where.createdAt.lt = endDate;
+      }
+    }
+
+    const logs = await prisma.auditLog.findMany({
+      where,
+      take: limit,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Generate standardized report format
+    const lines: string[] = [];
+    
+    // Header
+    lines.push('='.repeat(100));
+    lines.push('AUDIT LOG REPORT - MERCHANT ACTIVITY');
+    lines.push('='.repeat(100));
+    lines.push(`Generated: ${new Date().toISOString()}`);
+    lines.push(`Total Records: ${logs.length}`);
+    lines.push('');
+    lines.push('');
+
+    // Column headers
+    lines.push('ID | Timestamp | Merchant ID | User ID | Email | Action | IP Address | Response Status | Response Time (ms) | Location');
+    lines.push('-'.repeat(100));
+
+    // Log entries
+    for (const log of logs) {
+      let locationStr = 'N/A';
+      if (log.metadata && typeof log.metadata === 'object' && 'location' in log.metadata) {
+        const loc = (log.metadata as any).location;
+        if (loc.latitude && loc.longitude && loc.location) {
+          locationStr = `${loc.location} (${loc.latitude}, ${loc.longitude})`;
+        } else if (loc.location) {
+          locationStr = loc.location;
+        }
+      }
+
+      const line = [
+        log.id.toString(),
+        log.createdAt.toISOString(),
+        log.merchantId || 'N/A',
+        log.userId?.toString() || 'N/A',
+        log.email || 'N/A',
+        log.actionType || 'N/A',
+        log.ipAddress,
+        log.responseStatus.toString(),
+        log.responseTimeMs?.toString() || 'N/A',
+        locationStr,
+      ].join(' | ');
+
+      lines.push(line);
+    }
+
+    lines.push('');
+    lines.push('-'.repeat(100));
+    lines.push(`End of Report - Total Records: ${logs.length}`);
+    lines.push(`Generated: ${new Date().toISOString()}`);
+
+    return lines.join('\n');
   },
 };
 

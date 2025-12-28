@@ -15,6 +15,9 @@ const signUpSchema = z.object({
 const signInSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  latitude: z.number(),
+  longitude: z.number(),
+  location: z.string().min(1),
 });
 
 const sendOtpSchema = z.object({
@@ -101,10 +104,13 @@ export async function authRoutes(fastify: FastifyInstance) {
         tags: ['Auth'],
         body: {
           type: 'object',
-          required: ['email', 'password'],
+          required: ['email', 'password', 'latitude', 'longitude', 'location'],
           properties: {
             email: { type: 'string', format: 'email' },
             password: { type: 'string' },
+            latitude: { type: 'number', description: 'Required: Browser geolocation latitude' },
+            longitude: { type: 'number', description: 'Required: Browser geolocation longitude' },
+            location: { type: 'string', description: 'Required: Location name/city/state' },
           },
         },
         response: {

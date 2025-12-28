@@ -5,6 +5,7 @@ import {
   UpdateMerchantProfileInput,
   AdminPasswordResetRequestInput,
   AdminPasswordResetVerifyInput,
+  GetAuditLogsInput,
 } from '../services/admin.service';
 import { logger, AppError, formatErrorResponse } from '@tsp/common';
 
@@ -262,6 +263,101 @@ export const adminController = {
       return reply.status(200).send(result);
     } catch (error: any) {
       logger.error('[Admin Controller] Verify password reset error:', error);
+      
+      if (error instanceof AppError) {
+        const errorResponse = formatErrorResponse(error);
+        return reply.status(error.statusCode || 500).send(errorResponse);
+      }
+      
+      return reply.status(500).send({
+        success: false,
+        error: {
+          message: 'Internal server error',
+          statusCode: 500,
+        },
+      });
+    }
+  },
+
+  /**
+   * GET /api/admin/audit-logs
+   * 
+   * Response Codes:
+   * - 200 OK: Returns audit logs with pagination
+   * - 401 Unauthorized: Invalid or missing authentication token
+   * - 500 Internal Server Error: Unexpected server error
+   */
+  async getAuditLogs(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = request.query as any;
+      const filters: GetAuditLogsInput = {
+        page: query.page ? parseInt(query.page, 10) : undefined,
+        limit: query.limit ? parseInt(query.limit, 10) : undefined,
+        merchantId: query.merchantId,
+        userId: query.userId ? parseInt(query.userId, 10) : undefined,
+        email: query.email,
+        actionType: query.actionType,
+        ipAddress: query.ipAddress,
+        startDate: query.startDate,
+        endDate: query.endDate,
+        responseStatus: query.responseStatus ? parseInt(query.responseStatus, 10) : undefined,
+        sessionId: query.sessionId,
+      };
+
+      const result = await adminService.getAuditLogs(filters);
+      return reply.status(200).send(result);
+    } catch (error: any) {
+      logger.error('[Admin Controller] Get audit logs error:', error);
+      
+      if (error instanceof AppError) {
+        const errorResponse = formatErrorResponse(error);
+        return reply.status(error.statusCode || 500).send(errorResponse);
+      }
+      
+      return reply.status(500).send({
+        success: false,
+        error: {
+          message: 'Internal server error',
+          statusCode: 500,
+        },
+      });
+    }
+  },
+
+  /**
+   * GET /api/admin/audit-logs/export
+   * 
+   * Response Codes:
+   * - 200 OK: Returns audit logs as .txt file
+   * - 401 Unauthorized: Invalid or missing authentication token
+   * - 500 Internal Server Error: Unexpected server error
+   */
+  async exportAuditLogs(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const query = request.query as any;
+      const filters: GetAuditLogsInput = {
+        limit: query.limit ? parseInt(query.limit, 10) : undefined,
+        merchantId: query.merchantId,
+        userId: query.userId ? parseInt(query.userId, 10) : undefined,
+        email: query.email,
+        actionType: query.actionType,
+        ipAddress: query.ipAddress,
+        startDate: query.startDate,
+        endDate: query.endDate,
+        responseStatus: query.responseStatus ? parseInt(query.responseStatus, 10) : undefined,
+        sessionId: query.sessionId,
+      };
+
+      const reportText = await adminService.exportAuditLogs(filters);
+      
+      const filename = `audit-logs-${new Date().toISOString().split('T')[0]}.txt`;
+      
+      return reply
+        .type('text/plain')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .send(reportText);
+    } catch (error: any) {
+      logger.error('[Admin Controller] Export audit logs error:', error);
       
       if (error instanceof AppError) {
         const errorResponse = formatErrorResponse(error);

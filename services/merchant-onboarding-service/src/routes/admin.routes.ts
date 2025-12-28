@@ -658,5 +658,174 @@ export async function adminRoutes(fastify: FastifyInstance) {
       return adminController.verifyPasswordReset({ ...request, body: validated } as any, reply);
     }
   );
+
+  // Get Audit Logs
+  fastify.get(
+    '/api/admin/audit-logs',
+    {
+      preHandler: [authenticateAdmin],
+      schema: {
+        description: 'Get merchant audit logs with filters (Admin only)',
+        tags: ['Admin'],
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'number', minimum: 1, description: 'Page number (default: 1)' },
+            limit: { type: 'number', minimum: 1, maximum: 100, description: 'Records per page (default: 50, max: 100)' },
+            merchantId: { type: 'string', description: 'Filter by merchant ID' },
+            userId: { type: 'number', description: 'Filter by user ID' },
+            email: { type: 'string', description: 'Filter by email (partial match)' },
+            actionType: { type: 'string', description: 'Filter by action type (e.g., signin, signup, verify_otp)' },
+            ipAddress: { type: 'string', description: 'Filter by IP address' },
+            startDate: { type: 'string', format: 'date-time', description: 'Start date (ISO format)' },
+            endDate: { type: 'string', format: 'date-time', description: 'End date (ISO format)' },
+            responseStatus: { type: 'number', description: 'Filter by HTTP response status code' },
+            sessionId: { type: 'string', description: 'Filter by session ID' },
+          },
+        },
+        response: {
+          200: {
+            description: 'Success - Returns audit logs with pagination',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              logs: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    sessionId: { type: 'string' },
+                    userId: { type: 'number' },
+                    merchantId: { type: 'string' },
+                    email: { type: 'string' },
+                    ipAddress: { type: 'string' },
+                    userAgent: { type: 'string' },
+                    requestMethod: { type: 'string' },
+                    requestPath: { type: 'string' },
+                    requestQuery: { type: 'object' },
+                    requestBody: { type: 'object' },
+                    responseStatus: { type: 'number' },
+                    responseTimeMs: { type: 'number' },
+                    routeName: { type: 'string' },
+                    actionType: { type: 'string' },
+                    metadata: { type: 'object' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                  },
+                },
+              },
+              pagination: {
+                type: 'object',
+                properties: {
+                  page: { type: 'number' },
+                  limit: { type: 'number' },
+                  total: { type: 'number' },
+                  totalPages: { type: 'number' },
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string' },
+                  statusCode: { type: 'number', example: 401 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      return adminController.getAuditLogs(request, reply);
+    }
+  );
+
+  // Export Audit Logs as .txt file
+  fastify.get(
+    '/api/admin/audit-logs/export',
+    {
+      preHandler: [authenticateAdmin],
+      schema: {
+        description: 'Export merchant audit logs as standardized .txt file (Admin only)',
+        tags: ['Admin'],
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number', minimum: 1, maximum: 50000, description: 'Max records to export (default: 10000, max: 50000)' },
+            merchantId: { type: 'string', description: 'Filter by merchant ID' },
+            userId: { type: 'number', description: 'Filter by user ID' },
+            email: { type: 'string', description: 'Filter by email (partial match)' },
+            actionType: { type: 'string', description: 'Filter by action type (e.g., signin, signup, verify_otp)' },
+            ipAddress: { type: 'string', description: 'Filter by IP address' },
+            startDate: { type: 'string', format: 'date-time', description: 'Start date (ISO format)' },
+            endDate: { type: 'string', format: 'date-time', description: 'End date (ISO format)' },
+            responseStatus: { type: 'number', description: 'Filter by HTTP response status code' },
+            sessionId: { type: 'string', description: 'Filter by session ID' },
+          },
+        },
+        response: {
+          200: {
+            description: 'Success - Returns audit logs as .txt file',
+            type: 'string',
+            contentMediaType: 'text/plain',
+          },
+          401: {
+            description: 'Unauthorized',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string' },
+                  statusCode: { type: 'number', example: 401 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      return adminController.exportAuditLogs(request, reply);
+    }
+  );
 }
 

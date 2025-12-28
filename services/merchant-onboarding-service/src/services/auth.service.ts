@@ -47,6 +47,9 @@ export interface SignUpInput {
 export interface SignInInput {
   email: string;
   password: string;
+  latitude: number;   // Required: Browser geolocation latitude
+  longitude: number;  // Required: Browser geolocation longitude
+  location: string;   // Required: Location name/city/state
 }
 
 export interface SendOtpInput {
