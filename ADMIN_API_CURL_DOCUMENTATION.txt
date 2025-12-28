@@ -1,0 +1,618 @@
+================================================================================
+ADMIN API - CURL DOCUMENTATION
+================================================================================
+Base URL (Development): http://localhost:3001
+Base URL (Production): http://64.227.171.110:3001
+
+All admin APIs require authentication via Bearer Token (JWT) in the Authorization header.
+Admin JWT tokens expire in 1 hour.
+
+================================================================================
+AUTHENTICATION ENDPOINTS
+================================================================================
+
+1. ADMIN SIGN IN
+--------------------------------------------------------------------------------
+Endpoint: POST /api/admin/signin
+Description: Sign in as admin (returns JWT token)
+Authentication: Not required
+Rate Limit: 2/sec, 5/min, 20/hour, 50/day
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+  {
+    "email": "admin@nineteenpay.com",
+    "password": "AdminPassword123!"
+  }
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/admin/signin \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "admin@nineteenpay.com",
+      "password": "AdminPassword123!"
+    }'
+
+Response (200 OK):
+  {
+    "success": true,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "admin": {
+      "id": 1,
+      "email": "admin@nineteenpay.com",
+      "name": "Admin User",
+      "role": "admin",
+      "isActive": true
+    }
+  }
+
+Response (401 Unauthorized):
+  {
+    "success": false,
+    "error": {
+      "message": "Invalid email or password",
+      "statusCode": 401
+    }
+  }
+
+Response (403 Forbidden):
+  {
+    "success": false,
+    "error": {
+      "message": "Admin account is disabled. Please contact support.",
+      "statusCode": 403
+    }
+  }
+
+
+2. ADMIN PASSWORD RESET - REQUEST OTP
+--------------------------------------------------------------------------------
+Endpoint: POST /api/admin/password-reset/request
+Description: Request password reset OTP (sent via SMS)
+Authentication: Not required
+Rate Limit: 1/sec, 3/min, 10/hour, 30/day
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+  {
+    "email": "admin@nineteenpay.com"
+  }
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/admin/password-reset/request \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "admin@nineteenpay.com"
+    }'
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "Admin password reset OTP sent to your registered mobile number.",
+    "maskedMobile": "9876****210",
+    "expiresIn": 600
+  }
+
+
+3. ADMIN PASSWORD RESET - VERIFY OTP AND SET NEW PASSWORD
+--------------------------------------------------------------------------------
+Endpoint: POST /api/admin/password-reset/verify
+Description: Verify OTP and set new password
+Authentication: Not required
+Rate Limit: 2/sec, 10/min, 50/hour, 200/day
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+  {
+    "email": "admin@nineteenpay.com",
+    "otp": "123456",
+    "newPassword": "NewAdminPassword123!"
+  }
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/admin/password-reset/verify \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "admin@nineteenpay.com",
+      "otp": "123456",
+      "newPassword": "NewAdminPassword123!"
+    }'
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "Password has been reset successfully. Please sign in with your new password."
+  }
+
+
+================================================================================
+MERCHANT MANAGEMENT ENDPOINTS
+================================================================================
+
+4. GET ALL MERCHANTS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/admin/merchants
+Description: Get all merchants with pagination and search
+Authentication: Required (Bearer Token)
+Rate Limit: 5/sec, 30/min, 100/hour, 500/day
+
+Request Headers:
+  Authorization: Bearer <ADMIN_JWT_TOKEN>
+
+Query Parameters:
+  page (optional): Page number (default: 1)
+  limit (optional): Records per page (default: 20, max: 100)
+  search (optional): Search by email, name, merchantId, or mobile
+
+cURL Command (Basic):
+  curl -X GET "http://localhost:3001/api/admin/merchants" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+cURL Command (With Pagination):
+  curl -X GET "http://localhost:3001/api/admin/merchants?page=1&limit=20" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+cURL Command (With Search):
+  curl -X GET "http://localhost:3001/api/admin/merchants?search=merchant@example.com&page=1&limit=20" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+Response (200 OK):
+  {
+    "success": true,
+    "merchants": [
+      {
+        "id": 1,
+        "name": "Merchant Name",
+        "email": "merchant@example.com",
+        "mobile": "9876543210",
+        "nineteenMerchantId": "12345678",
+        "kycVerified": false,
+        "isActive": true,
+        "isSettlementActive": false,
+        "is2faActive": true,
+        "isMobileVerified": true,
+        "isEmailVerified": true,
+        "state": "Maharashtra",
+        "createdAt": "2025-01-15T10:00:00.000Z",
+        "updatedAt": "2025-01-15T10:00:00.000Z",
+        "profile": {
+          "typeOfEntity": "Private Limited",
+          "pan": "ABCDE1234F",
+          "gst": "27ABCDE1234F1Z5",
+          "averageTicketSize": null,
+          "averageVolume": null,
+          "expectedTurnover": null,
+          "turnoverDoneTillDate": null,
+          "numberOfTransactionsDone": 0
+        }
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 100,
+      "totalPages": 5
+    }
+  }
+
+
+5. GET MERCHANT BY ID
+--------------------------------------------------------------------------------
+Endpoint: GET /api/admin/merchants/:merchantId
+Description: Get merchant details by merchant ID (includes full profile)
+Authentication: Required (Bearer Token)
+Rate Limit: 3/sec, 15/min, 60/hour, 200/day
+
+Request Headers:
+  Authorization: Bearer <ADMIN_JWT_TOKEN>
+
+URL Parameters:
+  merchantId: The 8-digit merchant ID (e.g., "12345678")
+
+cURL Command:
+  curl -X GET "http://localhost:3001/api/admin/merchants/12345678" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+Response (200 OK):
+  {
+    "success": true,
+    "merchant": {
+      "id": 1,
+      "name": "Merchant Name",
+      "email": "merchant@example.com",
+      "mobile": "9876543210",
+      "nineteenMerchantId": "12345678",
+      "kycVerified": false,
+      "isActive": true,
+      "isSettlementActive": false,
+      "is2faActive": true,
+      "isMobileVerified": true,
+      "isEmailVerified": true,
+      "state": "Maharashtra",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-01-15T10:00:00.000Z",
+      "profile": {
+        "nineteenMerchantId": "12345678",
+        "typeOfEntity": "Private Limited",
+        "pan": "ABCDE1234F",
+        "incorporationDate": "2020-01-15T00:00:00.000Z",
+        "gst": "27ABCDE1234F1Z5",
+        "businessAddress": "123 Business Street, Mumbai",
+        "registrationNumber": "U12345MH2020PTC123456",
+        "mccCodes": null,
+        "directorDetails": null,
+        "shareholdingPatterns": null,
+        "uboDetails": null,
+        "accountDetails": null,
+        "whitelistedIps": null,
+        "apDetails": null,
+        "averageTicketSize": null,
+        "averageVolume": null,
+        "expectedTurnover": null,
+        "turnoverDoneTillDate": null,
+        "numberOfTransactionsDone": 0,
+        "createdAt": "2025-01-15T10:00:00.000Z",
+        "updatedAt": "2025-01-15T10:00:00.000Z"
+      }
+    }
+  }
+
+
+6. UPDATE MERCHANT PROFILE
+--------------------------------------------------------------------------------
+Endpoint: PUT /api/admin/merchants/:merchantId/profile
+Description: Update or create merchant profile data
+Authentication: Required (Bearer Token)
+Rate Limit: 3/sec, 15/min, 60/hour, 200/day
+
+Request Headers:
+  Content-Type: application/json
+  Authorization: Bearer <ADMIN_JWT_TOKEN>
+
+URL Parameters:
+  merchantId: The 8-digit merchant ID (e.g., "12345678")
+
+Request Body (all fields optional):
+  {
+    "typeOfEntity": "Private Limited",
+    "pan": "ABCDE1234F",
+    "incorporationDate": "2020-01-15",  // ISO date string
+    "gst": "27ABCDE1234F1Z5",
+    "businessAddress": "123 Business Street, Mumbai",
+    "registrationNumber": "U12345MH2020PTC123456",
+    "mccCodes": { "code1": "value1" },  // JSON object
+    "directorDetails": { "director1": {} },  // JSON object
+    "shareholdingPatterns": { "pattern1": {} },  // JSON object
+    "uboDetails": { "ubo1": {} },  // JSON object
+    "accountDetails": { "account1": {} },  // JSON object
+    "whitelistedIps": ["192.168.1.1"],  // JSON array
+    "apDetails": { "ap1": {} },  // JSON object
+    "averageTicketSize": 1000.50,
+    "averageVolume": 50000.00,
+    "expectedTurnover": 1000000.00,
+    "turnoverDoneTillDate": 500000.00,
+    "numberOfTransactionsDone": 500
+  }
+
+cURL Command:
+  curl -X PUT "http://localhost:3001/api/admin/merchants/12345678/profile" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -d '{
+      "typeOfEntity": "Private Limited",
+      "pan": "ABCDE1234F",
+      "gst": "27ABCDE1234F1Z5",
+      "businessAddress": "123 Business Street, Mumbai",
+      "averageTicketSize": 1000.50,
+      "averageVolume": 50000.00
+    }'
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "Merchant profile updated successfully",
+    "profile": {
+      "nineteenMerchantId": "12345678",
+      "typeOfEntity": "Private Limited",
+      "pan": "ABCDE1234F",
+      "gst": "27ABCDE1234F1Z5",
+      "businessAddress": "123 Business Street, Mumbai",
+      "averageTicketSize": 1000.50,
+      "averageVolume": 50000.00,
+      "updatedAt": "2025-01-15T11:00:00.000Z"
+    }
+  }
+
+
+7. DISABLE MERCHANT ACCOUNT
+--------------------------------------------------------------------------------
+Endpoint: POST /api/admin/merchants/:merchantId/disable
+Description: Disable a merchant account
+Authentication: Required (Bearer Token)
+Rate Limit: 3/sec, 15/min, 60/hour, 200/day
+
+Request Headers:
+  Authorization: Bearer <ADMIN_JWT_TOKEN>
+
+URL Parameters:
+  merchantId: The 8-digit merchant ID (e.g., "12345678")
+
+Request Body: None (empty body)
+
+cURL Command:
+  curl -X POST "http://localhost:3001/api/admin/merchants/12345678/disable" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "Merchant account disabled successfully",
+    "merchant": {
+      "id": 1,
+      "name": "Merchant Name",
+      "email": "merchant@example.com",
+      "nineteenMerchantId": "12345678",
+      "isActive": false,
+      "kycVerified": false
+    }
+  }
+
+
+8. ENABLE MERCHANT ACCOUNT
+--------------------------------------------------------------------------------
+Endpoint: POST /api/admin/merchants/:merchantId/enable
+Description: Enable a merchant account
+Authentication: Required (Bearer Token)
+Rate Limit: 3/sec, 15/min, 60/hour, 200/day
+
+Request Headers:
+  Authorization: Bearer <ADMIN_JWT_TOKEN>
+
+URL Parameters:
+  merchantId: The 8-digit merchant ID (e.g., "12345678")
+
+Request Body: None (empty body)
+
+cURL Command:
+  curl -X POST "http://localhost:3001/api/admin/merchants/12345678/enable" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "Merchant account enabled successfully",
+    "merchant": {
+      "id": 1,
+      "name": "Merchant Name",
+      "email": "merchant@example.com",
+      "nineteenMerchantId": "12345678",
+      "isActive": true,
+      "kycVerified": false
+    }
+  }
+
+
+================================================================================
+AUDIT LOG ENDPOINTS
+================================================================================
+
+9. GET AUDIT LOGS
+--------------------------------------------------------------------------------
+Endpoint: GET /api/admin/audit-logs
+Description: Get merchant audit logs with filters and pagination
+Authentication: Required (Bearer Token)
+Rate Limit: 5/sec, 30/min, 100/hour, 500/day
+
+Request Headers:
+  Authorization: Bearer <ADMIN_JWT_TOKEN>
+
+Query Parameters (all optional):
+  page: Page number (default: 1, minimum: 1)
+  limit: Records per page (default: 50, minimum: 1, maximum: 100)
+  merchantId: Filter by merchant ID (exact match)
+  userId: Filter by user ID (exact match)
+  email: Filter by email (partial match, case-insensitive)
+  actionType: Filter by action type (e.g., "signin", "signup", "verify_otp", "logout", "password_reset_request")
+  ipAddress: Filter by IP address (exact match)
+  startDate: Start date in ISO format (e.g., "2025-01-15T00:00:00.000Z")
+  endDate: End date in ISO format (e.g., "2025-01-15T23:59:59.999Z")
+  responseStatus: Filter by HTTP response status code (e.g., 200, 401, 403)
+  sessionId: Filter by session ID (exact match)
+
+cURL Command (Basic):
+  curl -X GET "http://localhost:3001/api/admin/audit-logs" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+cURL Command (With Filters):
+  curl -X GET "http://localhost:3001/api/admin/audit-logs?page=1&limit=50&merchantId=12345678&actionType=signin&startDate=2025-01-15T00:00:00.000Z&endDate=2025-01-15T23:59:59.999Z" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+cURL Command (By Email):
+  curl -X GET "http://localhost:3001/api/admin/audit-logs?email=merchant@example.com&page=1&limit=50" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+cURL Command (By IP Address):
+  curl -X GET "http://localhost:3001/api/admin/audit-logs?ipAddress=192.168.1.1&page=1&limit=50" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+cURL Command (Failed Logins):
+  curl -X GET "http://localhost:3001/api/admin/audit-logs?actionType=signin&responseStatus=401&page=1&limit=50" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+Response (200 OK):
+  {
+    "success": true,
+    "logs": [
+      {
+        "id": "123",
+        "sessionId": "sess_1234567890_abc123",
+        "userId": 1,
+        "merchantId": "12345678",
+        "email": "merchant@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0...",
+        "requestMethod": "POST",
+        "requestPath": "/api/auth/signin",
+        "requestQuery": null,
+        "requestBody": {
+          "email": "merchant@example.com",
+          "password": "***MASKED***"
+        },
+        "responseStatus": 200,
+        "responseTimeMs": 45,
+        "routeName": "/api/auth/signin",
+        "actionType": "signin",
+        "metadata": {
+          "url": "/api/auth/signin",
+          "location": {
+            "latitude": 19.0760,
+            "longitude": 72.8777,
+            "location": "Mumbai, India"
+          }
+        },
+        "createdAt": "2025-01-15T10:25:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 150,
+      "totalPages": 3
+    }
+  }
+
+
+10. EXPORT AUDIT LOGS AS .TXT FILE
+--------------------------------------------------------------------------------
+Endpoint: GET /api/admin/audit-logs/export
+Description: Export merchant audit logs as standardized .txt file for reporting
+Authentication: Required (Bearer Token)
+Rate Limit: Standard
+Note: Returns text/plain content with Content-Disposition header for download
+
+Request Headers:
+  Authorization: Bearer <ADMIN_JWT_TOKEN>
+
+Query Parameters (all optional, same as GET audit-logs):
+  limit: Max records to export (default: 10000, maximum: 50000)
+  merchantId: Filter by merchant ID
+  userId: Filter by user ID
+  email: Filter by email (partial match)
+  actionType: Filter by action type
+  ipAddress: Filter by IP address
+  startDate: Start date in ISO format
+  endDate: End date in ISO format
+  responseStatus: Filter by HTTP response status code
+  sessionId: Filter by session ID
+
+cURL Command (Basic Export):
+  curl -X GET "http://localhost:3001/api/admin/audit-logs/export" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -o audit-logs.txt
+
+cURL Command (With Filters):
+  curl -X GET "http://localhost:3001/api/admin/audit-logs/export?merchantId=12345678&startDate=2025-01-15T00:00:00.000Z&endDate=2025-01-15T23:59:59.999Z&limit=5000" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -o audit-logs-merchant-12345678.txt
+
+cURL Command (Export Failed Logins):
+  curl -X GET "http://localhost:3001/api/admin/audit-logs/export?actionType=signin&responseStatus=401&startDate=2025-01-15T00:00:00.000Z&limit=1000" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -o failed-logins-report.txt
+
+Response (200 OK):
+  Content-Type: text/plain
+  Content-Disposition: attachment; filename="audit-logs-2025-01-15.txt"
+  
+  ====================================================================================================
+  AUDIT LOG REPORT - MERCHANT ACTIVITY
+  ====================================================================================================
+  Generated: 2025-01-15T10:30:00.000Z
+  Total Records: 150
+  
+  
+  ID | Timestamp | Merchant ID | User ID | Email | Action | IP Address | Response Status | Response Time (ms) | Location
+  ---------------------------------------------------------------------------------------------------------------------------------------
+  123 | 2025-01-15T10:25:00.000Z | 12345678 | 1 | merchant@example.com | signin | 192.168.1.1 | 200 | 45 | Mumbai, India (19.0760, 72.8777)
+  122 | 2025-01-15T10:24:00.000Z | 12345678 | 1 | merchant@example.com | verify_otp | 192.168.1.1 | 200 | 30 | N/A
+  ...
+  
+  ---------------------------------------------------------------------------------------------------------------------------------------
+  End of Report - Total Records: 150
+  Generated: 2025-01-15T10:30:00.000Z
+
+
+================================================================================
+AUTHENTICATION NOTES
+================================================================================
+
+1. Admin JWT Token:
+   - Token is returned after successful admin sign-in
+   - Token expires in 1 hour
+   - Include token in Authorization header: "Authorization: Bearer <token>"
+   - Token must be refreshed by signing in again when expired
+
+2. Admin Roles:
+   - "admin": Standard admin access
+   - "super_admin": Super admin access (future use)
+   - "support": Support staff access (future use)
+
+3. Error Responses:
+   All errors follow this format:
+   {
+     "success": false,
+     "error": {
+       "message": "Error description",
+       "statusCode": 400  // HTTP status code
+     }
+   }
+
+4. Rate Limiting:
+   - Rate limits are applied per IP address
+   - Check response headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+   - 429 Too Many Requests response when limit exceeded
+
+5. Response Status Codes:
+   - 200: Success
+   - 400: Bad Request (validation error)
+   - 401: Unauthorized (invalid credentials/token)
+   - 403: Forbidden (account disabled)
+   - 404: Not Found
+   - 500: Internal Server Error
+   - 503: Service Unavailable (SMS service down)
+
+6. Audit Log Location Data:
+   - Location data (latitude, longitude, location name) is captured for merchant sign-in requests
+   - Location is stored in the metadata field of audit logs
+   - Location format in export: "Location Name (latitude, longitude)"
+
+================================================================================
+COMMON ACTION TYPES FOR FILTERING
+================================================================================
+
+Common actionType values for audit log filtering:
+  - "signup": Merchant registration
+  - "signin": Merchant sign-in
+  - "send_otp": OTP sent
+  - "verify_otp": OTP verified
+  - "logout": Merchant logout
+  - "password_reset_request": Password reset requested
+  - "password_reset_verify": Password reset verified
+  - "admin_signin": Admin sign-in
+  - "admin_password_reset_request": Admin password reset requested
+  - "admin_password_reset_verify": Admin password reset verified
+  - "admin_get_merchants": Admin viewed merchants list
+  - "admin_update_merchant": Admin updated merchant profile
+  - "admin_disable_merchant": Admin disabled merchant account
+  - "admin_enable_merchant": Admin enabled merchant account
+
+================================================================================
+END OF ADMIN API DOCUMENTATION
+================================================================================
+

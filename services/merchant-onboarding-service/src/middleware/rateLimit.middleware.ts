@@ -41,7 +41,13 @@ export const rateLimitMiddleware = async (
 
   try {
     const endpoint = request.url.split('?')[0]; // Remove query params
-    const ipAddress = extractIpAddress(request.headers);
+    const ipAddress = extractIpAddress(request.headers, request.socket);
+
+    // Skip rate limiting if IP cannot be determined (allow request)
+    if (ipAddress === 'unknown') {
+      logger.warn(`[Rate Limit] IP address unknown for ${endpoint}, skipping rate limit check`);
+      return;
+    }
 
     // Get rate limit configuration for this endpoint
     const config = getRateLimitConfig(endpoint);
@@ -62,11 +68,22 @@ export const rateLimitMiddleware = async (
     reply.header('X-RateLimit-Window', result.window);
 
     if (!result.allowed) {
-      logger.warn(`[Rate Limit] Rate limit exceeded for ${endpoint} from IP ${ipAddress}. Window: ${result.window}, Limit: ${result.limit}`);
+      const resetTime = new Date(result.resetTime * 1000);
+      const secondsUntilReset = Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000));
+      
+      logger.warn(`[Rate Limit] Rate limit exceeded for ${endpoint} from IP ${ipAddress}. Window: ${result.window}, Limit: ${result.limit}, Reset in: ${secondsUntilReset}s`);
 
-      // Return 429 Too Many Requests
+      // Return 429 Too Many Requests with user-friendly message
+      const windowNames: Record<string, string> = {
+        second: 'second',
+        minute: 'minute',
+        hour: 'hour',
+        day: 'day',
+      };
+      const windowName = windowNames[result.window] || result.window;
+      
       throw new TooManyRequestsError(
-        `Rate limit exceeded. Limit: ${result.limit} requests per ${result.window}. Reset at: ${new Date(result.resetTime * 1000).toISOString()}`
+        `Too many requests. You have exceeded the limit of ${result.limit} requests per ${windowName}. Please try again in ${secondsUntilReset} second${secondsUntilReset !== 1 ? 's' : ''}.`
       );
     }
 

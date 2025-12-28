@@ -152,8 +152,8 @@ export const auditMiddlewareOnResponse = async (
   const responseTime = Date.now() - startTime;
   const responseStatus = reply.statusCode || 200;
 
-  // Extract IP address from headers
-  const ipAddress = extractIpAddress(request.headers);
+  // Extract IP address from headers and socket
+  const ipAddress = extractIpAddress(request.headers, request.socket);
 
   // Get user info from request (if authenticated)
   const user = (request as any).user; // From auth middleware

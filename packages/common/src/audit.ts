@@ -26,29 +26,50 @@ export const maskSensitiveData = (data: any): any => {
 };
 
 /**
- * Extract IP address from headers (Nginx reverse proxy)
+ * Extract IP address from headers (Nginx reverse proxy) with socket fallback
  */
-export const extractIpAddress = (headers: Record<string, string | string[] | undefined>): string => {
+export const extractIpAddress = (
+  headers: Record<string, string | string[] | undefined>,
+  socket?: { remoteAddress?: string }
+): string => {
   // Priority order for IP detection (Nginx reverse proxy)
   const forwardedFor = headers['x-forwarded-for'];
   if (forwardedFor) {
     // X-Forwarded-For can contain multiple IPs, take the first one
     const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
-    return ips.split(',')[0].trim();
+    const ip = ips.split(',')[0].trim();
+    if (ip && ip !== '') {
+      return ip;
+    }
   }
 
   const realIp = headers['x-real-ip'];
   if (realIp) {
-    return Array.isArray(realIp) ? realIp[0] : realIp;
+    const ip = Array.isArray(realIp) ? realIp[0] : realIp;
+    if (ip && ip !== '') {
+      return ip;
+    }
   }
 
   const cfConnectingIp = headers['cf-connecting-ip'];
   if (cfConnectingIp) {
-    return Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
+    const ip = Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
+    if (ip && ip !== '') {
+      return ip;
+    }
   }
 
-  // Fallback - should not happen with Nginx reverse proxy
-  logger.warn('[Audit] Could not extract IP from headers, using unknown');
+  // Fallback to socket remote address if available
+  if (socket?.remoteAddress) {
+    // Handle IPv6-mapped IPv4 addresses (::ffff:127.0.0.1 -> 127.0.0.1)
+    const ip = socket.remoteAddress.replace(/^::ffff:/, '');
+    if (ip && ip !== '') {
+      return ip;
+    }
+  }
+
+  // Last resort fallback
+  logger.warn('[Audit] Could not extract IP from headers or socket, using unknown');
   return 'unknown';
 };
 

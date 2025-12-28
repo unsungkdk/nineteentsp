@@ -1,0 +1,432 @@
+================================================================================
+MERCHANT API - CURL DOCUMENTATION
+================================================================================
+Base URL (Development): http://localhost:3001
+Base URL (Production): http://64.227.171.110:3001
+
+All merchant APIs are accessible to merchants after authentication.
+Authentication is done via Bearer Token (JWT) in the Authorization header.
+
+================================================================================
+AUTHENTICATION ENDPOINTS
+================================================================================
+
+1. MERCHANT SIGN UP
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/signup
+Description: Register a new merchant account
+Authentication: Not required
+Rate Limit: 2/sec, 5/min, 10/hour, 20/day
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+  {
+    "name": "Merchant Name",
+    "email": "merchant@example.com",
+    "mobile": "9876543210",
+    "password": "SecurePassword123!",
+    "state": "Maharashtra"  // Optional
+  }
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/auth/signup \
+    -H "Content-Type: application/json" \
+    -d '{
+      "name": "Merchant Name",
+      "email": "merchant@example.com",
+      "mobile": "9876543210",
+      "password": "SecurePassword123!",
+      "state": "Maharashtra"
+    }'
+
+Response (201 Created):
+  {
+    "success": true,
+    "merchant": {
+      "id": 1,
+      "merchantId": "12345678",
+      "email": "merchant@example.com",
+      "name": "Merchant Name",
+      "kycVerified": false,
+      "isActive": false,
+      "isMobileVerified": false,
+      "isEmailVerified": false
+    }
+  }
+
+
+2. MERCHANT SIGN IN
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/signin
+Description: Sign in merchant (requires location from browser)
+Authentication: Not required
+Rate Limit: 3/sec, 10/min, 30/hour, 100/day
+Note: Location (latitude, longitude, location name) is MANDATORY
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+  {
+    "email": "merchant@example.com",
+    "password": "SecurePassword123!",
+    "latitude": 19.0760,        // REQUIRED: Browser geolocation latitude
+    "longitude": 72.8777,       // REQUIRED: Browser geolocation longitude
+    "location": "Mumbai, India" // REQUIRED: Location name/city/state
+  }
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/auth/signin \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "merchant@example.com",
+      "password": "SecurePassword123!",
+      "latitude": 19.0760,
+      "longitude": 72.8777,
+      "location": "Mumbai, India"
+    }'
+
+Response (200 OK - MFA Required):
+  {
+    "success": true,
+    "requiresOtp": true,
+    "message": "OTP verification required. OTP sent to your registered mobile number.",
+    "mfaSessionToken": "abc123def456...",
+    "maskedMobile": "9876****210",
+    "needsEmailVerification": false,
+    "needsMobileVerification": true,
+    "isMobileVerified": true,
+    "isEmailVerified": true
+  }
+
+Response (200 OK - Already Authenticated):
+  {
+    "success": true,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "merchant": {
+      "id": 1,
+      "merchantId": "12345678",
+      "email": "merchant@example.com",
+      "name": "Merchant Name",
+      "kycVerified": false,
+      "isActive": true
+    }
+  }
+
+Response (403 Forbidden - Account Verification Required):
+  {
+    "success": true,
+    "requiresOtp": true,
+    "message": "Please verify both your email and mobile number to activate your account.",
+    "mfaSessionToken": "abc123def456...",
+    "maskedMobile": "9876****210",
+    "needsEmailVerification": true,
+    "needsMobileVerification": true,
+    "isMobileVerified": false,
+    "isEmailVerified": false
+  }
+
+
+3. SEND OTP
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/send-otp
+Description: Send OTP to email or mobile number
+Authentication: Not required
+Rate Limit: 1/sec, 3/min, 10/hour, 30/day
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+  {
+    "email": "merchant@example.com",
+    "otpType": "sms"  // Options: "email", "mobile", "sms"
+  }
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/auth/send-otp \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "merchant@example.com",
+      "otpType": "sms"
+    }'
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "OTP sent to your sms.",
+    "expiresIn": 600
+  }
+
+
+4. VERIFY OTP
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/verify-otp
+Description: Verify OTP and complete authentication or account activation
+Authentication: Not required (uses mfaSessionToken or email)
+Rate Limit: 2/sec, 10/min, 50/hour, 200/day
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body (Using MFA Session Token - Recommended):
+  {
+    "mfaSessionToken": "abc123def456...",
+    "otp": "123456",
+    "otpType": "sms"  // For MFA login, only "sms" or "mobile" accepted
+  }
+
+Request Body (Using Email - Legacy):
+  {
+    "email": "merchant@example.com",
+    "otp": "123456",
+    "otpType": "email"
+  }
+
+cURL Command (MFA Session):
+  curl -X POST http://localhost:3001/api/auth/verify-otp \
+    -H "Content-Type: application/json" \
+    -d '{
+      "mfaSessionToken": "abc123def456...",
+      "otp": "123456",
+      "otpType": "sms"
+    }'
+
+cURL Command (Email):
+  curl -X POST http://localhost:3001/api/auth/verify-otp \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "merchant@example.com",
+      "otp": "123456",
+      "otpType": "email"
+    }'
+
+Response (200 OK - Authentication Complete):
+  {
+    "success": true,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "message": "MFA login successful.",
+    "merchant": {
+      "id": 1,
+      "merchantId": "12345678",
+      "email": "merchant@example.com",
+      "kycVerified": false,
+      "isActive": true,
+      "isMobileVerified": true,
+      "isEmailVerified": true
+    }
+  }
+
+Response (200 OK - More Verification Needed):
+  {
+    "success": true,
+    "message": "Email OTP verified. Please verify mobile OTP to complete verification.",
+    "requiresOtp": true,
+    "mfaSessionToken": "abc123def456...",
+    "emailOtpVerified": true,
+    "mobileOtpVerified": false
+  }
+
+
+5. PASSWORD RESET - REQUEST OTP
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/password-reset/request
+Description: Request password reset OTP (sent via SMS)
+Authentication: Not required
+Rate Limit: 1/sec, 3/min, 10/hour, 30/day
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+  {
+    "email": "merchant@example.com"
+  }
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/auth/password-reset/request \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "merchant@example.com"
+    }'
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "Password reset OTP sent to your registered mobile number.",
+    "maskedMobile": "9876****210",
+    "expiresIn": 600
+  }
+
+
+6. PASSWORD RESET - VERIFY OTP AND SET NEW PASSWORD
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/password-reset/verify
+Description: Verify OTP and set new password
+Authentication: Not required
+Rate Limit: 2/sec, 10/min, 50/hour, 200/day
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body:
+  {
+    "email": "merchant@example.com",
+    "otp": "123456",
+    "newPassword": "NewSecurePassword123!"
+  }
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/auth/password-reset/verify \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "merchant@example.com",
+      "otp": "123456",
+      "newPassword": "NewSecurePassword123!"
+    }'
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "Password has been reset successfully. Please sign in with your new password."
+  }
+
+
+7. LOGOUT
+--------------------------------------------------------------------------------
+Endpoint: POST /api/auth/logout
+Description: Logout merchant (invalidates session)
+Authentication: Required (Bearer Token)
+Rate Limit: Standard
+
+Request Headers:
+  Content-Type: application/json
+  Authorization: Bearer <JWT_TOKEN>
+
+Request Body: None (empty body)
+
+cURL Command:
+  curl -X POST http://localhost:3001/api/auth/logout \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+Response (200 OK):
+  {
+    "success": true,
+    "message": "Logged out successfully."
+  }
+
+
+================================================================================
+MERCHANT PROFILE ENDPOINTS
+================================================================================
+
+8. GET MERCHANT PROFILE
+--------------------------------------------------------------------------------
+Endpoint: GET /api/merchant/profile
+Description: Get merchant profile with all fields from merchant_profile table
+Authentication: Required (Bearer Token)
+Rate Limit: Standard
+
+Request Headers:
+  Authorization: Bearer <JWT_TOKEN>
+
+cURL Command:
+  curl -X GET http://localhost:3001/api/merchant/profile \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+Response (200 OK):
+  {
+    "success": true,
+    "merchant": {
+      "id": 1,
+      "name": "Merchant Name",
+      "email": "merchant@example.com",
+      "mobile": "9876543210",
+      "nineteenMerchantId": "12345678",
+      "kycVerified": false,
+      "isActive": true,
+      "isSettlementActive": false,
+      "is2faActive": true,
+      "isMobileVerified": true,
+      "isEmailVerified": true,
+      "state": "Maharashtra",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-01-15T10:00:00.000Z",
+      "profile": {
+        "typeOfEntity": "Private Limited",
+        "pan": "ABCDE1234F",
+        "incorporationDate": "2020-01-15",
+        "gst": "27ABCDE1234F1Z5",
+        "businessAddress": "123 Business Street, Mumbai",
+        "registrationNumber": "U12345MH2020PTC123456",
+        "mccCodes": null,
+        "directorDetails": null,
+        "shareholdingPatterns": null,
+        "uboDetails": null,
+        "accountDetails": null,
+        "whitelistedIps": null,
+        "apDetails": null,
+        "averageTicketSize": null,
+        "averageVolume": null,
+        "expectedTurnover": null,
+        "turnoverDoneTillDate": null,
+        "numberOfTransactionsDone": 0,
+        "createdAt": "2025-01-15T10:00:00.000Z",
+        "updatedAt": "2025-01-15T10:00:00.000Z"
+      }
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  // Optional: New token if refreshed
+  }
+
+
+================================================================================
+AUTHENTICATION NOTES
+================================================================================
+
+1. JWT Token:
+   - Token is returned after successful OTP verification
+   - Token expires in 10 minutes (sliding session)
+   - Include token in Authorization header: "Authorization: Bearer <token>"
+   - Token is automatically refreshed on authenticated requests (check X-New-Token header)
+
+2. MFA Flow:
+   - First-time login: Requires both email and SMS OTP verification
+   - Subsequent logins: Requires SMS OTP only (MFA)
+   - MFA session token is returned in sign-in response
+   - MFA session token expires in 10 minutes
+
+3. Error Responses:
+   All errors follow this format:
+   {
+     "success": false,
+     "error": {
+       "message": "Error description",
+       "statusCode": 400  // HTTP status code
+     }
+   }
+
+4. Rate Limiting:
+   - Rate limits are applied per IP address
+   - Check response headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+   - 429 Too Many Requests response when limit exceeded
+
+5. Response Status Codes:
+   - 200: Success
+   - 201: Created (signup)
+   - 400: Bad Request (validation error)
+   - 401: Unauthorized (invalid credentials/token)
+   - 403: Forbidden (account not activated)
+   - 404: Not Found
+   - 409: Conflict (email/mobile already exists)
+   - 422: Unprocessable Entity (invalid state)
+   - 429: Too Many Requests
+   - 500: Internal Server Error
+   - 503: Service Unavailable (SMS/Email service down)
+
+================================================================================
+END OF MERCHANT API DOCUMENTATION
+================================================================================
+
