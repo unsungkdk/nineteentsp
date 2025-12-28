@@ -45,33 +45,77 @@ export const sendOtpSms = async (mobile: string, otp: string, name?: string): Pr
     const apiUrl = `${config.sms.apiUrl}?${params.toString()}`;
 
     logger.info(`[SMS Service] Sending SMS to ${mobile}`);
+    logger.info(`[SMS Service] Merchant name (truncated): ${merchantName}`);
     logger.info(`[SMS Service] Message: ${message}`);
     logger.info(`[SMS Service] API URL: ${config.sms.apiUrl}`);
+    logger.info(`[SMS Service] Request parameters: route=${config.sms.route}, type=${config.sms.type}, sender=${config.sms.sender}, templateId=${config.sms.templateId}`);
 
     // Send SMS via API
     const response = await axios.get(apiUrl, {
       timeout: 10000, // 10 second timeout
     });
 
-    logger.info(`[SMS Service] SMS sent successfully to ${mobile}`);
-    logger.info(`[SMS Service] API response: ${JSON.stringify(response.data)}`);
+    // Log full response details
+    logger.info(`[SMS Service] ===== SMS API Response =====`);
+    logger.info(`[SMS Service] Status Code: ${response.status}`);
+    logger.info(`[SMS Service] Status Text: ${response.statusText}`);
+    logger.info(`[SMS Service] Response Headers: ${JSON.stringify(response.headers)}`);
+    logger.info(`[SMS Service] Response Data Type: ${typeof response.data}`);
+    logger.info(`[SMS Service] Response Data: ${JSON.stringify(response.data, null, 2)}`);
+    
+    // Try to parse if response is a string
+    if (typeof response.data === 'string') {
+      logger.info(`[SMS Service] Response Data (raw string): ${response.data}`);
+      try {
+        const parsedData = JSON.parse(response.data);
+        logger.info(`[SMS Service] Response Data (parsed JSON): ${JSON.stringify(parsedData, null, 2)}`);
+      } catch (e) {
+        logger.info(`[SMS Service] Response Data is not valid JSON, treating as plain text`);
+      }
+    }
+    
+    logger.info(`[SMS Service] ===== End SMS API Response =====`);
 
     // Check if response indicates success
     if (response.status === 200) {
-      logger.info(`[SMS Service] OTP SMS sent successfully to ${mobile}`);
+      logger.info(`[SMS Service] OTP SMS sent successfully to ${mobile} - Status 200 OK`);
     } else {
-      logger.warn(`[SMS Service] Unexpected response status: ${response.status}`);
+      logger.warn(`[SMS Service] Unexpected response status: ${response.status} - Expected 200`);
     }
   } catch (error: any) {
+    logger.error(`[SMS Service] ===== SMS API Error =====`);
     logger.error(`[SMS Service] Failed to send OTP SMS to ${mobile}`);
     logger.error(`[SMS Service] Error type: ${error?.constructor?.name || 'Unknown'}`);
     logger.error(`[SMS Service] Error message: ${error?.message || 'No message'}`);
-    logger.error(`[SMS Service] Error stack: ${error?.stack || 'No stack trace'}`);
     
-    // Log API response if available
+    // Log full error response if available
     if (error?.response) {
-      logger.error(`[SMS Service] API response error: ${JSON.stringify(error.response.data)}`);
+      logger.error(`[SMS Service] Error Response Status: ${error.response.status}`);
+      logger.error(`[SMS Service] Error Response Status Text: ${error.response.statusText}`);
+      logger.error(`[SMS Service] Error Response Headers: ${JSON.stringify(error.response.headers)}`);
+      logger.error(`[SMS Service] Error Response Data: ${JSON.stringify(error.response.data, null, 2)}`);
+      
+      // Try to parse if error response data is a string
+      if (typeof error.response.data === 'string') {
+        logger.error(`[SMS Service] Error Response Data (raw string): ${error.response.data}`);
+        try {
+          const parsedErrorData = JSON.parse(error.response.data);
+          logger.error(`[SMS Service] Error Response Data (parsed JSON): ${JSON.stringify(parsedErrorData, null, 2)}`);
+        } catch (e) {
+          logger.error(`[SMS Service] Error Response Data is not valid JSON`);
+        }
+      }
     }
+    
+    // Log request details if available
+    if (error?.config) {
+      logger.error(`[SMS Service] Request URL: ${error.config.url}`);
+      logger.error(`[SMS Service] Request Method: ${error.config.method}`);
+      logger.error(`[SMS Service] Request Headers: ${JSON.stringify(error.config.headers)}`);
+    }
+    
+    logger.error(`[SMS Service] Error stack: ${error?.stack || 'No stack trace'}`);
+    logger.error(`[SMS Service] ===== End SMS API Error =====`);
     
     throw new Error(`Failed to send SMS: ${error?.message || 'Unknown error'}`);
   }
