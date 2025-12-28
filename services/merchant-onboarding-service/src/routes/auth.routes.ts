@@ -22,9 +22,12 @@ const sendOtpSchema = z.object({
 });
 
 const verifyOtpSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().optional(),
+  mfaSessionToken: z.string().optional(),
   otp: z.string().length(6),
   otpType: z.enum(['email', 'mobile', 'sms']),
+}).refine((data) => data.email || data.mfaSessionToken, {
+  message: 'Either email or mfaSessionToken is required',
 });
 
 export async function authRoutes(fastify: FastifyInstance) {
@@ -81,7 +84,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     '/api/auth/signin',
     {
       schema: {
-        description: 'Sign in merchant',
+        description: 'Sign in merchant - MFA always required',
         tags: ['Auth'],
         body: {
           type: 'object',
@@ -96,6 +99,14 @@ export async function authRoutes(fastify: FastifyInstance) {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              requiresOtp: { type: 'boolean' },
+              message: { type: 'string' },
+              mfaSessionToken: { type: 'string' },
+              maskedMobile: { type: 'string' },
+              needsEmailVerification: { type: 'boolean' },
+              needsMobileVerification: { type: 'boolean' },
+              isMobileVerified: { type: 'boolean' },
+              isEmailVerified: { type: 'boolean' },
               token: { type: 'string' },
               merchant: {
                 type: 'object',
@@ -160,13 +171,14 @@ export async function authRoutes(fastify: FastifyInstance) {
     '/api/auth/verify-otp',
     {
       schema: {
-        description: 'Verify OTP and get token',
+        description: 'Verify OTP and get token - MFA sessions only accept SMS OTP (not email). Supports MFA session token or email (legacy).',
         tags: ['Auth'],
         body: {
           type: 'object',
-          required: ['email', 'otp', 'otpType'],
+          required: ['otp', 'otpType'],
           properties: {
             email: { type: 'string', format: 'email' },
+            mfaSessionToken: { type: 'string' },
             otp: { type: 'string', minLength: 6, maxLength: 6 },
             otpType: { type: 'string', enum: ['email', 'mobile', 'sms'] },
           },
@@ -176,6 +188,13 @@ export async function authRoutes(fastify: FastifyInstance) {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              message: { type: 'string' },
+              requiresOtp: { type: 'boolean' },
+              mfaSessionToken: { type: 'string' },
+              emailOtpVerified: { type: 'boolean' },
+              smsOtpVerified: { type: 'boolean' },
+              needsEmailVerification: { type: 'boolean' },
+              needsMobileVerification: { type: 'boolean' },
               token: { type: 'string' },
               merchant: {
                 type: 'object',

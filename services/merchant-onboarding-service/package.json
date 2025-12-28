@@ -16,17 +16,18 @@
     "db:introspect": "prisma db pull"
   },
   "dependencies": {
-    "@tsp/common": "*",
-    "@tsp/types": "*",
-    "@prisma/client": "^5.7.1",
-    "fastify": "^4.24.3",
+    "@fastify/cors": "^9.0.1",
     "@fastify/swagger": "^8.15.0",
     "@fastify/swagger-ui": "^1.10.0",
-    "@fastify/cors": "^9.0.1",
-    "zod": "^3.22.4",
-    "dotenv": "^16.3.1",
+    "@prisma/client": "^5.7.1",
+    "@tsp/common": "*",
+    "@tsp/types": "*",
     "axios": "^1.6.2",
-    "sib-api-v3-sdk": "^8.5.0"
+    "dotenv": "^16.3.1",
+    "fastify": "^4.24.3",
+    "redis": "^5.10.0",
+    "sib-api-v3-sdk": "^8.5.0",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -38,4 +39,3 @@
     "typescript": "^5.3.3"
   }
 }
-

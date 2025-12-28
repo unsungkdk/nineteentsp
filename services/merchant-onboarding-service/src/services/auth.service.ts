@@ -3,8 +3,24 @@ import { hashPassword, comparePassword, generateToken, JWTPayload, logger } from
 import { ValidationError, NotFoundError, UnauthorizedError, ConflictError } from '@tsp/common';
 import { sendOtpEmail as sendBrevoEmail } from './email.service';
 import { sendOtpSms as sendSmsOtp } from './sms.service';
+import { getRedisClient } from './redis.service';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
+
+// MFA Session interface
+// For first-time login: tracks both email and SMS OTP verification
+// For subsequent logins (MFA): tracks only SMS OTP verification
+interface MfaSession {
+  merchantId: number;
+  email: string;
+  mobile: string;
+  emailOtpVerified: boolean; // For first-time login
+  smsOtpVerified: boolean; // For both first-time and MFA
+  isMfaOnly: boolean; // true = MFA login, false = first-time activation
+  expiresAt: number; // Unix timestamp
+  attempts: number; // Max 3 attempts per OTP
+}
 
 export interface SignUpInput {
   name: string;
@@ -25,9 +41,10 @@ export interface SendOtpInput {
 }
 
 export interface VerifyOtpInput {
-  email: string;
+  email?: string; // Optional if mfaSessionToken is provided (legacy support)
+  mfaSessionToken?: string; // MFA session token from sign-in (SMS OTP only)
   otp: string;
-  otpType: 'email' | 'mobile' | 'sms';
+  otpType: 'email' | 'mobile' | 'sms'; // MFA sessions only accept 'sms' or 'mobile'
 }
 
 /**
@@ -35,6 +52,21 @@ export interface VerifyOtpInput {
  */
 const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+/**
+ * Generate MFA session token
+ */
+const generateMfaSessionToken = (): string => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Mask mobile number for display
+ */
+const maskMobile = (mobile: string): string => {
+  if (mobile.length < 4) return '****';
+  return `${mobile.substring(0, 4)}****${mobile.substring(mobile.length - 3)}`;
 };
 
 
@@ -141,6 +173,7 @@ export const authService = {
 
   /**
    * Sign in merchant
+   * MFA is ALWAYS required - no access without phone and email verification
    */
   async signIn(input: SignInInput) {
     // Find merchant by email
@@ -172,43 +205,181 @@ export const authService = {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    // If 2FA is enabled, require OTP verification
-    if (merchant.is2faActive) {
+    // Check account status
+    const mfaEnabled = merchant.is2faActive;
+    const phoneVerified = merchant.isMobileVerified;
+    const emailVerified = merchant.isEmailVerified;
+    const accountActive = merchant.isActive;
+
+    // Case 1: First-time login - Account not activated
+    // Require BOTH email AND mobile verification to activate account
+    if (!accountActive || !emailVerified || !phoneVerified) {
+      logger.info(`[Auth Service] First-time login for ${input.email}. Account active: ${accountActive}, Email verified: ${emailVerified}, Phone verified: ${phoneVerified}`);
+
+      // Generate session token
+      const mfaSessionToken = generateMfaSessionToken();
+      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+      // Create session in Redis for first-time activation
+      const redisClient = await getRedisClient();
+      const mfaSession: MfaSession = {
+        merchantId: merchant.id,
+        email: merchant.email,
+        mobile: merchant.mobile,
+        emailOtpVerified: emailVerified, // Already verified if true
+        smsOtpVerified: phoneVerified, // Already verified if true
+        isMfaOnly: false, // This is first-time activation
+        expiresAt,
+        attempts: 0,
+      };
+
+      await redisClient.setEx(
+        `mfa:session:${mfaSessionToken}`,
+        600, // 10 minutes TTL
+        JSON.stringify(mfaSession)
+      );
+
+      logger.info(`[Auth Service] Created first-time activation session for ${input.email}. Token: ${mfaSessionToken.substring(0, 8)}...`);
+
+      // Send email OTP if not verified
+      if (!emailVerified) {
+        const emailOtp = generateOtp();
+        const emailOtpExpiresAt = new Date();
+        emailOtpExpiresAt.setMinutes(emailOtpExpiresAt.getMinutes() + 10);
+
+        await prisma.merchantOtp.create({
+          data: {
+            email: merchant.email,
+            otp: emailOtp,
+            expiresAt: emailOtpExpiresAt,
+            otpType: 'email',
+            isUsed: false,
+          },
+        });
+
+        try {
+          await sendOtpEmail(merchant.email, emailOtp, merchant.name);
+          logger.info(`[Auth Service] Email OTP sent to ${merchant.email} for first-time activation`);
+        } catch (error: any) {
+          logger.error(`[Auth Service] Failed to send email OTP:`, error);
+        }
+      }
+
+      // Send SMS OTP if not verified
+      if (!phoneVerified) {
+        const mobileOtp = generateOtp();
+        const mobileOtpExpiresAt = new Date();
+        mobileOtpExpiresAt.setMinutes(mobileOtpExpiresAt.getMinutes() + 10);
+
+        await prisma.merchantOtp.create({
+          data: {
+            email: merchant.email,
+            otp: mobileOtp,
+            expiresAt: mobileOtpExpiresAt,
+            otpType: 'sms',
+            mobile: merchant.mobile,
+            isUsed: false,
+          },
+        });
+
+        try {
+          await sendSmsOtp(merchant.mobile, mobileOtp, merchant.name);
+          logger.info(`[Auth Service] SMS OTP sent to ${merchant.mobile} for first-time activation`);
+        } catch (error: any) {
+          logger.error(`[Auth Service] Failed to send SMS OTP:`, error);
+          throw error;
+        }
+      }
+
       return {
         success: true,
         requiresOtp: true,
-        message: 'OTP verification required',
-        isMobileVerified: merchant.isMobileVerified,
-        isEmailVerified: merchant.isEmailVerified,
-        isActive: merchant.isActive,
+        message: 'Please verify both your email and mobile number to activate your account.',
+        mfaSessionToken,
+        maskedMobile: maskMobile(merchant.mobile),
+        needsEmailVerification: !emailVerified,
+        needsMobileVerification: !phoneVerified,
+        isMobileVerified: phoneVerified,
+        isEmailVerified: emailVerified,
       };
     }
 
-    // Generate JWT token
-    const token = generateToken({
-      userId: merchant.id.toString(),
-      merchantId: merchant.nineteenMerchantId || '',
-      role: 'merchant',
+    // Case 2: Subsequent login - Account activated, MFA enabled
+    // Only require SMS OTP for MFA
+    if (accountActive && mfaEnabled && emailVerified && phoneVerified) {
+      logger.info(`[Auth Service] MFA login for ${input.email}. MFA enabled: ${mfaEnabled}`);
+
+      // Generate MFA session token
+      const mfaSessionToken = generateMfaSessionToken();
+      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+      // Create MFA session in Redis (SMS OTP only)
+      const redisClient = await getRedisClient();
+      const mfaSession: MfaSession = {
+        merchantId: merchant.id,
+        email: merchant.email,
+        mobile: merchant.mobile,
+        emailOtpVerified: true, // Not needed for MFA, but set to true
+        smsOtpVerified: false, // Needs SMS OTP verification
+        isMfaOnly: true, // This is MFA-only login
+        expiresAt,
+        attempts: 0,
+      };
+
+      await redisClient.setEx(
+        `mfa:session:${mfaSessionToken}`,
+        600, // 10 minutes TTL
+        JSON.stringify(mfaSession)
+      );
+
+      logger.info(`[Auth Service] Created MFA session for ${input.email}. Token: ${mfaSessionToken.substring(0, 8)}...`);
+
+      // Send SMS OTP for MFA
+      const mobileOtp = generateOtp();
+      const mobileOtpExpiresAt = new Date();
+      mobileOtpExpiresAt.setMinutes(mobileOtpExpiresAt.getMinutes() + 10);
+
+      await prisma.merchantOtp.create({
+        data: {
       email: merchant.email,
-      kycVerified: merchant.kycVerified,
-      isActive: merchant.isActive,
-    });
+          otp: mobileOtp,
+          expiresAt: mobileOtpExpiresAt,
+          otpType: 'sms',
+          mobile: merchant.mobile,
+          isUsed: false,
+        },
+      });
+
+      try {
+        await sendSmsOtp(merchant.mobile, mobileOtp, merchant.name);
+        logger.info(`[Auth Service] SMS OTP sent to ${merchant.mobile} for MFA login`);
+      } catch (error: any) {
+        logger.error(`[Auth Service] Failed to send SMS OTP:`, error);
+        throw error;
+      }
 
     return {
       success: true,
-      token,
-      merchant: {
-        id: merchant.id,
-        merchantId: merchant.nineteenMerchantId,
-        email: merchant.email,
-        mobile: merchant.mobile,
-        name: merchant.name,
-        kycVerified: merchant.kycVerified,
-        isActive: merchant.isActive,
-        isMobileVerified: merchant.isMobileVerified,
-        isEmailVerified: merchant.isEmailVerified,
-      },
-    };
+        requiresOtp: true,
+        message: 'OTP verification required. OTP sent to your registered mobile number.',
+        mfaSessionToken,
+        maskedMobile: maskMobile(merchant.mobile),
+        needsEmailVerification: false,
+        needsMobileVerification: true,
+        isMobileVerified: true,
+        isEmailVerified: true,
+      };
+    }
+
+    // This should never happen - all cases should be handled above
+    // If we reach here, it's an unexpected state
+    const mfaEnabled = merchant.is2faActive;
+    const phoneVerified = merchant.isMobileVerified;
+    const emailVerified = merchant.isEmailVerified;
+    const accountActive = merchant.isActive;
+    
+    logger.error(`[Auth Service] Unexpected state reached for ${input.email}. Account active: ${accountActive}, MFA enabled: ${mfaEnabled}, Email verified: ${emailVerified}, Phone verified: ${phoneVerified}`);
+    throw new Error('Unexpected authentication state. Please contact support.');
   },
 
   /**
@@ -297,12 +468,52 @@ export const authService = {
 
   /**
    * Verify OTP and return token
+   * MFA sessions only accept SMS OTP (not email OTP)
+   * Supports both MFA session token and email-based verification (legacy)
    */
   async verifyOtp(input: VerifyOtpInput) {
+    let merchantEmail: string;
+    let mfaSession: MfaSession | null = null;
+
+    // If mfaSessionToken is provided, get session from Redis
+    if (input.mfaSessionToken) {
+      const redisClient = await getRedisClient();
+      const sessionData = await redisClient.get(`mfa:session:${input.mfaSessionToken}`);
+
+      if (!sessionData) {
+        throw new UnauthorizedError('Invalid or expired MFA session');
+      }
+
+      mfaSession = JSON.parse(sessionData) as MfaSession;
+
+      // Check if session is expired
+      if (Date.now() > mfaSession.expiresAt) {
+        await redisClient.del(`mfa:session:${input.mfaSessionToken}`);
+        throw new UnauthorizedError('MFA session has expired. Please sign in again.');
+      }
+
+      // Check attempts limit
+      if (mfaSession.attempts >= 3) {
+        await redisClient.del(`mfa:session:${input.mfaSessionToken}`);
+        throw new UnauthorizedError('Too many failed attempts. Please sign in again.');
+      }
+
+      // MFA-only sessions only accept SMS OTP, not email OTP
+      if (mfaSession.isMfaOnly && input.otpType === 'email') {
+        throw new ValidationError('MFA verification only accepts SMS OTP. Please use otpType: "sms" or "mobile".');
+      }
+
+      merchantEmail = mfaSession.email;
+    } else if (input.email) {
+      merchantEmail = input.email;
+    } else {
+      throw new ValidationError('Either email or mfaSessionToken is required');
+    }
+
     // Find valid OTP
     const otpRecord = await prisma.merchantOtp.findFirst({
       where: {
-        email: input.email,
+        email: merchantEmail,
         otp: input.otp,
         otpType: input.otpType,
         isUsed: false,
@@ -313,6 +524,16 @@ export const authService = {
     });
 
     if (!otpRecord) {
+      // Increment attempts if MFA session exists
+      if (mfaSession && input.mfaSessionToken) {
+        const redisClient = await getRedisClient();
+        mfaSession.attempts += 1;
+        await redisClient.setEx(
+          `mfa:session:${input.mfaSessionToken}`,
+          Math.floor((mfaSession.expiresAt - Date.now()) / 1000),
+          JSON.stringify(mfaSession)
+        );
+      }
       throw new UnauthorizedError('Invalid OTP');
     }
 
@@ -329,14 +550,185 @@ export const authService = {
 
     // Get merchant
     const merchant = await prisma.merchantsMaster.findUnique({
-      where: { email: input.email },
+      where: { email: merchantEmail },
     });
 
     if (!merchant) {
       throw new NotFoundError('Merchant');
     }
 
-    // Update verification status based on OTP type
+    // If MFA session exists, handle verification based on session type
+    if (mfaSession && input.mfaSessionToken) {
+      const redisClient = await getRedisClient();
+
+      // Case 1: MFA-only login (subsequent logins) - Only SMS OTP
+      if (mfaSession.isMfaOnly) {
+        // MFA sessions only accept SMS OTP (already validated above)
+        if (input.otpType === 'mobile' || input.otpType === 'sms') {
+          mfaSession.smsOtpVerified = true;
+
+          // SMS OTP verified for MFA - generate JWT immediately
+          const updatedMerchant = await prisma.merchantsMaster.findUnique({
+            where: { email: merchantEmail },
+            select: {
+              id: true,
+              email: true,
+              mobile: true,
+              nineteenMerchantId: true,
+              name: true,
+              kycVerified: true,
+              isActive: true,
+              isMobileVerified: true,
+              isEmailVerified: true,
+              is2faActive: true,
+            },
+          });
+
+          if (!updatedMerchant) {
+            throw new NotFoundError('Merchant');
+          }
+
+          // Delete MFA session from Redis
+          await redisClient.del(`mfa:session:${input.mfaSessionToken}`);
+
+          logger.info(`[Auth Service] SMS OTP verified for MFA login. ${merchantEmail}`);
+
+          // Generate JWT token
+          const token = generateToken({
+            userId: updatedMerchant.id.toString(),
+            merchantId: updatedMerchant.nineteenMerchantId || '',
+            role: 'merchant',
+            email: updatedMerchant.email,
+            kycVerified: updatedMerchant.kycVerified,
+            isActive: updatedMerchant.isActive,
+          });
+
+          return {
+            success: true,
+            token,
+            merchant: {
+              id: updatedMerchant.id,
+              merchantId: updatedMerchant.nineteenMerchantId,
+              email: updatedMerchant.email,
+              mobile: updatedMerchant.mobile,
+              name: updatedMerchant.name,
+              kycVerified: updatedMerchant.kycVerified,
+              isActive: updatedMerchant.isActive,
+              isMobileVerified: updatedMerchant.isMobileVerified,
+              isEmailVerified: updatedMerchant.isEmailVerified,
+            },
+          };
+        }
+      } 
+      // Case 2: First-time activation - Both email AND SMS OTP required
+      else {
+        // Update session based on OTP type
+        if (input.otpType === 'email') {
+          mfaSession.emailOtpVerified = true;
+        } else if (input.otpType === 'mobile' || input.otpType === 'sms') {
+          mfaSession.smsOtpVerified = true;
+        }
+
+        // Check if both OTPs are verified
+        const allVerified = mfaSession.emailOtpVerified && mfaSession.smsOtpVerified;
+
+        if (allVerified) {
+          // Both verified - activate account, enable MFA, verify both
+          const updatedMerchant = await prisma.merchantsMaster.update({
+            where: { email: merchantEmail },
+            data: {
+              isActive: true, // Activate account
+              is2faActive: true, // Enable MFA
+              isEmailVerified: true,
+              isMobileVerified: true,
+            },
+            select: {
+              id: true,
+              email: true,
+              mobile: true,
+              nineteenMerchantId: true,
+              name: true,
+              kycVerified: true,
+              isActive: true,
+              isMobileVerified: true,
+              isEmailVerified: true,
+              is2faActive: true,
+            },
+          });
+
+          // Delete session from Redis
+          await redisClient.del(`mfa:session:${input.mfaSessionToken}`);
+
+          logger.info(`[Auth Service] Both email and SMS OTP verified. Account activated and MFA enabled for ${merchantEmail}`);
+
+          // Generate JWT token
+          const token = generateToken({
+            userId: updatedMerchant.id.toString(),
+            merchantId: updatedMerchant.nineteenMerchantId || '',
+            role: 'merchant',
+            email: updatedMerchant.email,
+            kycVerified: updatedMerchant.kycVerified,
+            isActive: updatedMerchant.isActive,
+          });
+
+          return {
+            success: true,
+            token,
+            merchant: {
+              id: updatedMerchant.id,
+              merchantId: updatedMerchant.nineteenMerchantId,
+              email: updatedMerchant.email,
+              mobile: updatedMerchant.mobile,
+              name: updatedMerchant.name,
+              kycVerified: updatedMerchant.kycVerified,
+              isActive: updatedMerchant.isActive,
+              isMobileVerified: updatedMerchant.isMobileVerified,
+              isEmailVerified: updatedMerchant.isEmailVerified,
+            },
+          };
+        } else {
+          // Not both verified yet - update session and ask for the other OTP
+          await redisClient.setEx(
+            `mfa:session:${input.mfaSessionToken}`,
+            Math.floor((mfaSession.expiresAt - Date.now()) / 1000),
+            JSON.stringify(mfaSession)
+          );
+
+          // Update merchant verification status for the verified OTP
+          const updateData: any = {};
+          if (input.otpType === 'email') {
+            updateData.isEmailVerified = true;
+          } else if (input.otpType === 'mobile' || input.otpType === 'sms') {
+            updateData.isMobileVerified = true;
+          }
+
+          await prisma.merchantsMaster.update({
+            where: { email: merchantEmail },
+            data: updateData,
+          });
+
+          // Determine which OTP is still needed
+          const needsEmail = !mfaSession.emailOtpVerified;
+          const needsSms = !mfaSession.smsOtpVerified;
+
+          return {
+            success: true,
+            message: needsEmail && needsSms
+              ? 'Please verify both email and mobile OTP to activate your account.'
+              : needsEmail
+              ? 'Email OTP verified. Please verify mobile OTP to activate your account.'
+              : 'Mobile OTP verified. Please verify email OTP to activate your account.',
+            requiresOtp: true,
+            mfaSessionToken: input.mfaSessionToken,
+            emailOtpVerified: mfaSession.emailOtpVerified,
+            smsOtpVerified: mfaSession.smsOtpVerified,
+            needsEmailVerification: needsEmail,
+            needsMobileVerification: needsSms,
+          };
+        }
+      }
+    } else {
+      // Legacy flow without MFA session (for backward compatibility with send-otp endpoint)
     const updateData: any = {};
     if (input.otpType === 'email') {
       updateData.isEmailVerified = true;
@@ -348,15 +740,16 @@ export const authService = {
     const willBeEmailVerified = input.otpType === 'email' ? true : merchant.isEmailVerified;
     const willBeMobileVerified = (input.otpType === 'mobile' || input.otpType === 'sms') ? true : merchant.isMobileVerified;
 
-    // Activate account if both verifications are complete
+      // Activate account and enable MFA if both verifications are complete
     if (willBeEmailVerified && willBeMobileVerified) {
       updateData.isActive = true;
-      logger.info(`[Auth Service] Both email and mobile verified for ${input.email}. Activating account.`);
+        updateData.is2faActive = true;
+        logger.info(`[Auth Service] Both email and mobile verified for ${merchantEmail}. Activating account and enabling MFA.`);
     }
 
     // Update merchant verification status
     const updatedMerchant = await prisma.merchantsMaster.update({
-      where: { email: input.email },
+        where: { email: merchantEmail },
       data: updateData,
       select: {
         id: true,
@@ -371,7 +764,8 @@ export const authService = {
       },
     });
 
-    // Generate JWT token
+      // Only generate token if both are verified
+      if (willBeEmailVerified && willBeMobileVerified) {
     const token = generateToken({
       userId: updatedMerchant.id.toString(),
       merchantId: updatedMerchant.nineteenMerchantId || '',
@@ -396,6 +790,16 @@ export const authService = {
         isEmailVerified: updatedMerchant.isEmailVerified,
       },
     };
+      } else {
+        return {
+          success: true,
+          message: input.otpType === 'email'
+            ? 'Email OTP verified. Please verify mobile OTP to complete verification.'
+            : 'Mobile OTP verified. Please verify email OTP to complete verification.',
+          requiresOtp: true,
+        };
+      }
+    }
   },
 };
 
