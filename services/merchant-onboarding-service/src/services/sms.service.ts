@@ -63,15 +63,25 @@ export const sendOtpSms = async (mobile: string, otp: string, name?: string): Pr
     logger.info(`[SMS Service] Response Data Type: ${typeof response.data}`);
     logger.info(`[SMS Service] Response Data: ${JSON.stringify(response.data, null, 2)}`);
     
-    // Try to parse if response is a string
-    if (typeof response.data === 'string') {
+    // Handle different response data types
+    if (typeof response.data === 'number') {
+      logger.info(`[SMS Service] Response Data (numeric): ${response.data} - This appears to be a Message ID/Transaction ID`);
+      logger.info(`[SMS Service] ✅ SMS successfully queued/sent with Message ID: ${response.data}`);
+    } else if (typeof response.data === 'string') {
       logger.info(`[SMS Service] Response Data (raw string): ${response.data}`);
-      try {
-        const parsedData = JSON.parse(response.data);
-        logger.info(`[SMS Service] Response Data (parsed JSON): ${JSON.stringify(parsedData, null, 2)}`);
-      } catch (e) {
-        logger.info(`[SMS Service] Response Data is not valid JSON, treating as plain text`);
+      // Check if it looks like a numeric string (message ID)
+      if (/^\d+$/.test(response.data.trim())) {
+        logger.info(`[SMS Service] ✅ SMS successfully queued/sent with Message ID: ${response.data.trim()}`);
+      } else {
+        try {
+          const parsedData = JSON.parse(response.data);
+          logger.info(`[SMS Service] Response Data (parsed JSON): ${JSON.stringify(parsedData, null, 2)}`);
+        } catch (e) {
+          logger.info(`[SMS Service] Response Data is not valid JSON, treating as plain text`);
+        }
       }
+    } else if (typeof response.data === 'object' && response.data !== null) {
+      logger.info(`[SMS Service] Response Data (object): ${JSON.stringify(response.data, null, 2)}`);
     }
     
     logger.info(`[SMS Service] ===== End SMS API Response =====`);
