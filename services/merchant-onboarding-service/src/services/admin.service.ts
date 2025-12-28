@@ -230,8 +230,45 @@ export const adminService = {
   async getMerchantById(merchantId: string) {
     const merchant = await prisma.merchantsMaster.findUnique({
       where: { nineteenMerchantId: merchantId },
-      include: {
-        profile: true,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        mobile: true,
+        nineteenMerchantId: true,
+        kycVerified: true,
+        isActive: true,
+        isSettlementActive: true,
+        is2faActive: true,
+        isMobileVerified: true,
+        isEmailVerified: true,
+        state: true,
+        createdAt: true,
+        updatedAt: true,
+        profile: {
+          select: {
+            typeOfEntity: true,
+            pan: true,
+            incorporationDate: true,
+            gst: true,
+            businessAddress: true,
+            registrationNumber: true,
+            mccCodes: true,
+            directorDetails: true,
+            shareholdingPatterns: true,
+            uboDetails: true,
+            accountDetails: true,
+            whitelistedIps: true,
+            apDetails: true,
+            averageTicketSize: true,
+            averageVolume: true,
+            expectedTurnover: true,
+            turnoverDoneTillDate: true,
+            numberOfTransactionsDone: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     });
 
