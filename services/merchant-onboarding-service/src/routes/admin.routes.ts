@@ -30,6 +30,16 @@ const updateMerchantProfileSchema = z.object({
   numberOfTransactionsDone: z.number().int().optional(),
 });
 
+const adminPasswordResetRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+const adminPasswordResetVerifySchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6),
+  newPassword: z.string().min(8),
+});
+
 export async function adminRoutes(fastify: FastifyInstance) {
   // Admin Sign In
   fastify.post(
@@ -480,6 +490,172 @@ export async function adminRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       return adminController.enableMerchantAccount(request as any, reply);
+    }
+  );
+
+  // Admin Password Reset - Request OTP
+  fastify.post(
+    '/api/admin/password-reset/request',
+    {
+      schema: {
+        description: 'Request admin password reset - sends SMS OTP to registered mobile number. Returns success even if email doesn\'t exist (security best practice).',
+        tags: ['Admin'],
+        body: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+          },
+        },
+        response: {
+          200: {
+            description: 'Success - OTP sent (or generic success message if email doesn\'t exist)',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              maskedMobile: { type: 'string' },
+              expiresIn: { type: 'number', description: 'OTP expiry time in seconds' },
+            },
+          },
+          400: {
+            description: 'Bad Request - Validation error (mobile not registered)',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Mobile number not registered. Please contact support to reset your password.' },
+                  statusCode: { type: 'number', example: 400 },
+                },
+              },
+            },
+          },
+          503: {
+            description: 'Service Unavailable - SMS service temporarily unavailable',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'SMS service temporarily unavailable. Please try again later or contact support.' },
+                  statusCode: { type: 'number', example: 503 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const validated = adminPasswordResetRequestSchema.parse(request.body);
+      return adminController.requestPasswordReset({ ...request, body: validated } as any, reply);
+    }
+  );
+
+  // Admin Password Reset - Verify OTP and Reset Password
+  fastify.post(
+    '/api/admin/password-reset/verify',
+    {
+      schema: {
+        description: 'Verify admin password reset OTP and set new password',
+        tags: ['Admin'],
+        body: {
+          type: 'object',
+          required: ['email', 'otp', 'newPassword'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+            otp: { type: 'string', minLength: 6, maxLength: 6 },
+            newPassword: { type: 'string', minLength: 8 },
+          },
+        },
+        response: {
+          200: {
+            description: 'Success - Password reset successful',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+            },
+          },
+          400: {
+            description: 'Bad Request - Validation error (invalid password format or OTP format)',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Password must be at least 8 characters long' },
+                  statusCode: { type: 'number', example: 400 },
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized - Invalid or expired OTP',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Invalid or expired OTP. Please request a new password reset.' },
+                  statusCode: { type: 'number', example: 401 },
+                },
+              },
+            },
+          },
+          404: {
+            description: 'Not Found - Admin not found',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Admin not found' },
+                  statusCode: { type: 'number', example: 404 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const validated = adminPasswordResetVerifySchema.parse(request.body);
+      return adminController.verifyPasswordReset({ ...request, body: validated } as any, reply);
     }
   );
 }

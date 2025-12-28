@@ -13,6 +13,7 @@ import {
   ForbiddenError,
   AppError
 } from '@tsp/common';
+import { sendOtpSms } from './sms.service';
 
 const prisma = new PrismaClient();
 
@@ -41,6 +42,31 @@ export interface UpdateMerchantProfileInput {
   turnoverDoneTillDate?: number;
   numberOfTransactionsDone?: number;
 }
+
+export interface AdminPasswordResetRequestInput {
+  email: string;
+}
+
+export interface AdminPasswordResetVerifyInput {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+/**
+ * Generate a 6-digit OTP
+ */
+const generateOtp = (): string => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+/**
+ * Mask mobile number for display
+ */
+const maskMobile = (mobile: string): string => {
+  if (mobile.length < 7) return mobile;
+  return mobile.substring(0, 4) + '****' + mobile.substring(mobile.length - 3);
+};
 
 export const adminService = {
   /**
@@ -352,6 +378,153 @@ export const adminService = {
       success: true,
       message: 'Merchant account enabled successfully',
       merchant: updatedMerchant,
+    };
+  },
+
+  /**
+   * Request admin password reset - sends SMS OTP
+   */
+  async requestPasswordReset(input: AdminPasswordResetRequestInput) {
+    // Find admin by email
+    const admin = await prisma.admin.findUnique({
+      where: { email: input.email },
+      select: {
+        id: true,
+        email: true,
+        mobile: true,
+        name: true,
+        isActive: true,
+      },
+    });
+
+    // Don't reveal if email exists - return success either way (security best practice)
+    if (!admin) {
+      logger.warn(`[Admin Service] Password reset requested for non-existent email: ${input.email}`);
+      // Return success to prevent email enumeration attacks
+      return {
+        success: true,
+        message: 'If the email exists, a password reset OTP has been sent to your registered mobile number.',
+      };
+    }
+
+    // Check if account is active
+    if (!admin.isActive) {
+      logger.warn(`[Admin Service] Password reset requested for inactive admin: ${input.email}`);
+      // Still return success to prevent account enumeration
+      return {
+        success: true,
+        message: 'If the email exists, a password reset OTP has been sent to your registered mobile number.',
+      };
+    }
+
+    // Check if mobile is available
+    if (!admin.mobile) {
+      logger.warn(`[Admin Service] Password reset requested for admin without mobile: ${input.email}`);
+      throw new ValidationError('Mobile number not registered. Please contact support to reset your password.');
+    }
+
+    // Generate OTP
+    const resetOtp = generateOtp();
+    const otpExpiresAt = new Date();
+    otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 10); // 10 minutes expiry
+
+    // Store OTP in database
+    await prisma.adminOtp.create({
+      data: {
+        adminId: admin.id,
+        email: admin.email,
+        otp: resetOtp,
+        expiresAt: otpExpiresAt,
+        otpType: 'sms', // Password reset uses SMS only
+        mobile: admin.mobile,
+        isUsed: false,
+      },
+    });
+
+    // Send SMS OTP
+    try {
+      await sendOtpSms(admin.mobile, resetOtp, admin.name);
+      logger.info(`[Admin Service] Password reset OTP sent to ${admin.mobile} for ${input.email}`);
+    } catch (error: any) {
+      logger.error(`[Admin Service] Failed to send password reset SMS OTP:`, error);
+      throw new AppError(
+        503,
+        'SMS service temporarily unavailable. Please try again later or contact support.'
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Password reset OTP has been sent to your registered mobile number.',
+      maskedMobile: maskMobile(admin.mobile),
+      expiresIn: 600, // 10 minutes in seconds
+    };
+  },
+
+  /**
+   * Verify admin password reset OTP and update password
+   */
+  async verifyPasswordReset(input: AdminPasswordResetVerifyInput) {
+    // Validate new password
+    if (input.newPassword.length < 8) {
+      throw new ValidationError('Password must be at least 8 characters long');
+    }
+
+    // Find admin
+    const admin = await prisma.admin.findUnique({
+      where: { email: input.email },
+      select: {
+        id: true,
+        email: true,
+        isActive: true,
+      },
+    });
+
+    if (!admin) {
+      throw new NotFoundError('Admin');
+    }
+
+    // Find valid OTP
+    const otpRecord = await prisma.adminOtp.findFirst({
+      where: {
+        adminId: admin.id,
+        email: input.email,
+        otp: input.otp,
+        otpType: 'sms',
+        isUsed: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (!otpRecord) {
+      throw new UnauthorizedError('Invalid or expired OTP. Please request a new password reset.');
+    }
+
+    // Mark OTP as used
+    await prisma.adminOtp.update({
+      where: { id: otpRecord.id },
+      data: { isUsed: true },
+    });
+
+    // Hash new password
+    const hashedPassword = await hashPassword(input.newPassword);
+
+    // Update password
+    await prisma.admin.update({
+      where: { email: input.email },
+      data: { password: hashedPassword },
+    });
+
+    logger.info(`[Admin Service] Password reset successful for ${input.email}`);
+
+    return {
+      success: true,
+      message: 'Password has been reset successfully. Please sign in with your new password.',
     };
   },
 };

@@ -3,6 +3,8 @@ import {
   adminService, 
   AdminSignInInput,
   UpdateMerchantProfileInput,
+  AdminPasswordResetRequestInput,
+  AdminPasswordResetVerifyInput,
 } from '../services/admin.service';
 import { logger, AppError, formatErrorResponse } from '@tsp/common';
 
@@ -197,6 +199,69 @@ export const adminController = {
       return reply.status(200).send(result);
     } catch (error: any) {
       logger.error('[Admin Controller] Enable merchant account error:', error);
+      
+      if (error instanceof AppError) {
+        const errorResponse = formatErrorResponse(error);
+        return reply.status(error.statusCode || 500).send(errorResponse);
+      }
+      
+      return reply.status(500).send({
+        success: false,
+        error: {
+          message: 'Internal server error',
+          statusCode: 500,
+        },
+      });
+    }
+  },
+
+  /**
+   * POST /api/admin/password-reset/request
+   * 
+   * Response Codes:
+   * - 200 OK: Password reset OTP sent successfully (even if email doesn't exist - security)
+   * - 400 Bad Request: Validation error (mobile not registered)
+   * - 503 Service Unavailable: SMS service temporarily unavailable
+   * - 500 Internal Server Error: Unexpected server error
+   */
+  async requestPasswordReset(request: FastifyRequest<{ Body: AdminPasswordResetRequestInput }>, reply: FastifyReply) {
+    try {
+      const result = await adminService.requestPasswordReset(request.body);
+      return reply.status(200).send(result);
+    } catch (error: any) {
+      logger.error('[Admin Controller] Request password reset error:', error);
+      
+      if (error instanceof AppError) {
+        const errorResponse = formatErrorResponse(error);
+        return reply.status(error.statusCode || 500).send(errorResponse);
+      }
+      
+      return reply.status(500).send({
+        success: false,
+        error: {
+          message: 'Internal server error',
+          statusCode: 500,
+        },
+      });
+    }
+  },
+
+  /**
+   * POST /api/admin/password-reset/verify
+   * 
+   * Response Codes:
+   * - 200 OK: Password reset successfully
+   * - 400 Bad Request: Validation error (invalid password format, invalid OTP format)
+   * - 401 Unauthorized: Invalid or expired OTP
+   * - 404 Not Found: Admin not found
+   * - 500 Internal Server Error: Unexpected server error
+   */
+  async verifyPasswordReset(request: FastifyRequest<{ Body: AdminPasswordResetVerifyInput }>, reply: FastifyReply) {
+    try {
+      const result = await adminService.verifyPasswordReset(request.body);
+      return reply.status(200).send(result);
+    } catch (error: any) {
+      logger.error('[Admin Controller] Verify password reset error:', error);
       
       if (error instanceof AppError) {
         const errorResponse = formatErrorResponse(error);

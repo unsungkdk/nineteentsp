@@ -11,27 +11,27 @@ datasource db {
 }
 
 model MerchantsMaster {
-  id                   Int       @id @default(autoincrement())
-  name                 String    @db.VarChar(2048)
-  email                String    @unique @db.VarChar(255)
-  mobile               String    @db.VarChar(20)
-  state                String?   @db.VarChar(100)
-  kycVerified          Boolean   @default(false) @map("kyc_verified")
-  isActive             Boolean   @default(true) @map("is_active")
-  isSettlementActive   Boolean   @default(false) @map("is_settlement_active")
-  nineteenMerchantId   String?   @unique @map("nineteen_merchant_id") @db.VarChar(255)
-  password             String    @db.VarChar(255)
-  tpin                 String?   @db.VarChar(10)
-  is2faActive          Boolean   @default(false) @map("is_2fa_active")
-  isMobileVerified     Boolean   @default(false) @map("is_mobile_verified")
-  isEmailVerified      Boolean   @default(false) @map("is_email_verified")
-  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                 Int      @id @default(autoincrement())
+  name               String   @db.VarChar(2048)
+  email              String   @unique @db.VarChar(255)
+  mobile             String   @db.VarChar(20)
+  state              String?  @db.VarChar(100)
+  kycVerified        Boolean  @default(false) @map("kyc_verified")
+  isActive           Boolean  @default(true) @map("is_active")
+  isSettlementActive Boolean  @default(false) @map("is_settlement_active")
+  nineteenMerchantId String?  @unique @map("nineteen_merchant_id") @db.VarChar(255)
+  password           String   @db.VarChar(255)
+  tpin               String?  @db.VarChar(10)
+  is2faActive        Boolean  @default(false) @map("is_2fa_active")
+  isMobileVerified   Boolean  @default(false) @map("is_mobile_verified")
+  isEmailVerified    Boolean  @default(false) @map("is_email_verified")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  otps                 MerchantOtp[]
-  accessLogs           MerchantAccessLog[]
-  profile              MerchantProfile?
+  otps       MerchantOtp[]
+  accessLogs MerchantAccessLog[]
+  profile    MerchantProfile?
 
   @@index([email], name: "idx_merchants_email")
   @@index([isActive], name: "idx_merchants_is_active")
@@ -41,17 +41,17 @@ model MerchantsMaster {
 }
 
 model MerchantOtp {
-  id         Int       @id @default(autoincrement())
-  email      String    @db.VarChar(255)
-  otp        String    @db.VarChar(10)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
-  isUsed     Boolean   @default(false) @map("is_used")
-  otpType    String    @default("email") @map("otp_type") @db.VarChar(20)
-  mobile     String?   @db.VarChar(20)
+  id        Int      @id @default(autoincrement())
+  email     String   @db.VarChar(255)
+  otp       String   @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  isUsed    Boolean  @default(false) @map("is_used")
+  otpType   String   @default("email") @map("otp_type") @db.VarChar(20)
+  mobile    String?  @db.VarChar(20)
 
   // Relations
-  merchant   MerchantsMaster @relation(fields: [email], references: [email], onDelete: Cascade)
+  merchant MerchantsMaster @relation(fields: [email], references: [email], onDelete: Cascade)
 
   @@index([createdAt], name: "idx_merchant_otps_created_at")
   @@index([email], name: "idx_merchant_otps_email")
@@ -62,15 +62,15 @@ model MerchantOtp {
 }
 
 model MerchantAccessLog {
-  id                Int       @id @default(autoincrement())
-  merchantId        String?   @map("merchant_id") @db.VarChar(255)
-  action            String    @db.VarChar(100)
-  ipAddress         String?   @map("ip_address") @db.VarChar(45)
-  userAgent         String?   @map("user_agent") @db.Text
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         Int      @id @default(autoincrement())
+  merchantId String?  @map("merchant_id") @db.VarChar(255)
+  action     String   @db.VarChar(100)
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  merchant          MerchantsMaster? @relation(fields: [merchantId], references: [nineteenMerchantId], onDelete: Cascade)
+  merchant MerchantsMaster? @relation(fields: [merchantId], references: [nineteenMerchantId], onDelete: Cascade)
 
   @@index([merchantId], name: "idx_merchant_access_logs_merchant_id")
   @@index([createdAt], name: "idx_merchant_access_logs_created_at")
@@ -78,23 +78,23 @@ model MerchantAccessLog {
 }
 
 model AuditLog {
-  id                BigInt    @id @default(autoincrement())
-  sessionId         String    @map("session_id") @db.VarChar(255)
-  userId            Int?      @map("user_id")
-  merchantId        String?   @map("merchant_id") @db.VarChar(50)
-  email             String?   @db.VarChar(255)
-  ipAddress         String    @map("ip_address") @db.VarChar(45)
-  userAgent         String?   @map("user_agent") @db.Text
-  requestMethod     String    @map("request_method") @db.VarChar(10)
-  requestPath       String    @map("request_path") @db.Text
-  requestQuery      Json?     @map("request_query")
-  requestBody       Json?     @map("request_body")
-  responseStatus    Int       @map("response_status")
-  responseTimeMs    Int?      @map("response_time_ms")
-  routeName         String?   @map("route_name") @db.VarChar(255)
-  actionType        String?   @map("action_type") @db.VarChar(50)
-  metadata          Json?     @db.JsonB
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             BigInt   @id @default(autoincrement())
+  sessionId      String   @map("session_id") @db.VarChar(255)
+  userId         Int?     @map("user_id")
+  merchantId     String?  @map("merchant_id") @db.VarChar(50)
+  email          String?  @db.VarChar(255)
+  ipAddress      String   @map("ip_address") @db.VarChar(45)
+  userAgent      String?  @map("user_agent") @db.Text
+  requestMethod  String   @map("request_method") @db.VarChar(10)
+  requestPath    String   @map("request_path") @db.Text
+  requestQuery   Json?    @map("request_query")
+  requestBody    Json?    @map("request_body")
+  responseStatus Int      @map("response_status")
+  responseTimeMs Int?     @map("response_time_ms")
+  routeName      String?  @map("route_name") @db.VarChar(255)
+  actionType     String?  @map("action_type") @db.VarChar(50)
+  metadata       Json?    @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([sessionId], name: "idx_audit_logs_session_id")
   @@index([userId], name: "idx_audit_logs_user_id")
@@ -105,19 +105,22 @@ model AuditLog {
 }
 
 model Admin {
-  id                Int       @id @default(autoincrement())
-  email             String    @unique @db.VarChar(255)
-  password           String    @db.VarChar(255)
-  name               String    @db.VarChar(255)
-  role               String    @default("admin") @db.VarChar(50) // admin, super_admin, support
-  isActive           Boolean   @default(true) @map("is_active")
-  is2faActive        Boolean   @default(false) @map("is_2fa_active")
-  isMobileVerified   Boolean   @default(false) @map("is_mobile_verified")
-  isEmailVerified    Boolean   @default(false) @map("is_email_verified")
-  mobile             String?   @db.VarChar(20)
-  lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz(6)
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               Int       @id @default(autoincrement())
+  email            String    @unique @db.VarChar(255)
+  password         String    @db.VarChar(255)
+  name             String    @db.VarChar(255)
+  role             String    @default("admin") @db.VarChar(50) // admin, super_admin, support
+  isActive         Boolean   @default(true) @map("is_active")
+  is2faActive      Boolean   @default(false) @map("is_2fa_active")
+  isMobileVerified Boolean   @default(false) @map("is_mobile_verified")
+  isEmailVerified  Boolean   @default(false) @map("is_email_verified")
+  mobile           String?   @db.VarChar(20)
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  otps             AdminOtp[]
 
   @@index([email], name: "idx_admin_email")
   @@index([isActive], name: "idx_admin_is_active")
@@ -125,8 +128,30 @@ model Admin {
   @@map("admins")
 }
 
+model AdminOtp {
+  id         Int       @id @default(autoincrement())
+  adminId    Int       @map("admin_id")
+  email      String    @db.VarChar(255)
+  otp        String    @db.VarChar(10)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  isUsed     Boolean   @default(false) @map("is_used")
+  otpType    String    @default("sms") @map("otp_type") @db.VarChar(20)
+  mobile     String?   @db.VarChar(20)
+
+  // Relations
+  admin      Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt], name: "idx_admin_otps_created_at")
+  @@index([email], name: "idx_admin_otps_email")
+  @@index([email, otp], name: "idx_admin_otps_email_otp")
+  @@index([adminId], name: "idx_admin_otps_admin_id")
+  @@index([otpType], name: "idx_admin_otps_otp_type")
+  @@map("admin_otps")
+}
+
 model MerchantProfile {
-  nineteenMerchantId        String    @id @map("nineteen_merchant_id") @db.VarChar(255)
+  nineteenMerchantId       String    @id @map("nineteen_merchant_id") @db.VarChar(255)
   typeOfEntity             String?   @map("type_of_entity") @db.VarChar(100)
   pan                      String?   @db.VarChar(10)
   incorporationDate        DateTime? @map("incorporation_date") @db.Date
@@ -140,20 +165,19 @@ model MerchantProfile {
   accountDetails           Json?     @map("account_details") @db.JsonB
   whitelistedIps           Json?     @map("whitelisted_ips") @db.JsonB
   apDetails                Json?     @map("ap_details") @db.JsonB
-  averageTicketSize        Decimal?   @map("average_ticket_size") @db.Decimal(15, 2)
-  averageVolume            Decimal?   @map("average_volume") @db.Decimal(15, 2)
-  expectedTurnover         Decimal?   @map("expected_turnover") @db.Decimal(15, 2)
-  turnoverDoneTillDate     Decimal?   @map("turnover_done_till_date") @db.Decimal(15, 2)
-  numberOfTransactionsDone Int        @default(0) @map("number_of_transactions_done")
-  createdAt                DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  averageTicketSize        Decimal?  @map("average_ticket_size") @db.Decimal(15, 2)
+  averageVolume            Decimal?  @map("average_volume") @db.Decimal(15, 2)
+  expectedTurnover         Decimal?  @map("expected_turnover") @db.Decimal(15, 2)
+  turnoverDoneTillDate     Decimal?  @map("turnover_done_till_date") @db.Decimal(15, 2)
+  numberOfTransactionsDone Int       @default(0) @map("number_of_transactions_done")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  merchant                 MerchantsMaster @relation(fields: [nineteenMerchantId], references: [nineteenMerchantId], onDelete: Cascade)
+  merchant MerchantsMaster @relation(fields: [nineteenMerchantId], references: [nineteenMerchantId], onDelete: Cascade)
 
   @@index([gst], name: "idx_merchant_profile_gst")
   @@index([pan], name: "idx_merchant_profile_pan")
   @@index([typeOfEntity], name: "idx_merchant_profile_type_of_entity")
   @@map("merchant_profile")
 }
-

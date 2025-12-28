@@ -56,6 +56,18 @@ export const baseRateLimits: Record<string, RateLimitConfig> = {
     perHour: 200,
     perDay: 1000,
   },
+  '/api/admin/password-reset/request': {
+    perSecond: 1,
+    perMinute: 3,
+    perHour: 10,
+    perDay: 30,
+  },
+  '/api/admin/password-reset/verify': {
+    perSecond: 2,
+    perMinute: 10,
+    perHour: 50,
+    perDay: 200,
+  },
 };
 
 /**
