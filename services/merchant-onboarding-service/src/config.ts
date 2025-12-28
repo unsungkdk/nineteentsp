@@ -40,7 +40,7 @@ export const config = {
     sender: process.env.SMS_SENDER || 'INTTEE',
     route: process.env.SMS_ROUTE || '1',
     type: process.env.SMS_TYPE || '1',
-    templateId: process.env.SMS_TEMPLATE_ID || '1707176674769771409',
+    templateId: process.env.SMS_TEMPLATE_ID || '1707176682341684192',
   },
 };
 
