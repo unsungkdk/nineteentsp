@@ -44,6 +44,18 @@ export const baseRateLimits: Record<string, RateLimitConfig> = {
     perHour: 50,
     perDay: 200,
   },
+  '/api/admin/signin': {
+    perSecond: 2,
+    perMinute: 5,
+    perHour: 20,
+    perDay: 50,
+  },
+  '/api/admin/merchants': {
+    perSecond: 5,
+    perMinute: 30,
+    perHour: 200,
+    perDay: 1000,
+  },
 };
 
 /**

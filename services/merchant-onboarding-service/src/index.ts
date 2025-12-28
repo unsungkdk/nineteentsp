@@ -91,8 +91,10 @@ app.addHook('onResponse', auditMiddlewareOnResponse);
 // Register routes
 import { authRoutes } from './routes/auth.routes';
 import { merchantRoutes } from './routes/merchant.routes';
+import { adminRoutes } from './routes/admin.routes';
 app.register(authRoutes);
 app.register(merchantRoutes);
+app.register(adminRoutes);
 
 // Health check
 app.get('/health', async () => {
