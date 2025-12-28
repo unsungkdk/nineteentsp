@@ -276,51 +276,60 @@ export const adminService = {
       throw new NotFoundError('Merchant');
     }
 
-    // Always construct profile object with all fields explicitly set
-    // This ensures all fields are returned even if they're null or if profile doesn't exist
-    // Handle both cases: profile is null (doesn't exist) or profile is {} (empty object from Prisma)
-    const profileData: any = merchant.profile || {};
+    // Prisma returns the profile with all fields - ensure we preserve the JSON fields correctly
+    // The logs show Prisma returns JSON data correctly, so we just need to normalize null/undefined
+    const profileData = merchant.profile;
     
-    // Debug: Log what Prisma returned for JSON fields (to diagnose the empty object issue)
-    logger.info('[Admin Service] Raw Prisma profile data:', {
-      merchantId,
-      profileExists: !!merchant.profile,
-      mccCodes: profileData.mccCodes,
-      mccCodesType: typeof profileData.mccCodes,
-      mccCodesStringified: JSON.stringify(profileData.mccCodes),
-      whitelistedIps: profileData.whitelistedIps,
-      whitelistedIpsType: typeof profileData.whitelistedIps,
-      whitelistedIpsStringified: JSON.stringify(profileData.whitelistedIps),
-      directorDetails: profileData.directorDetails,
-      directorDetailsStringified: JSON.stringify(profileData.directorDetails),
-    });
+    // Build normalized profile ensuring all fields are present
+    const normalizedProfile = profileData ? {
+      typeOfEntity: profileData.typeOfEntity ?? null,
+      pan: profileData.pan ?? null,
+      incorporationDate: profileData.incorporationDate ?? null,
+      gst: profileData.gst ?? null,
+      businessAddress: profileData.businessAddress ?? null,
+      registrationNumber: profileData.registrationNumber ?? null,
+      // JSON fields - Prisma already deserializes them, just preserve the values
+      mccCodes: profileData.mccCodes ?? null,
+      directorDetails: profileData.directorDetails ?? null,
+      shareholdingPatterns: profileData.shareholdingPatterns ?? null,
+      uboDetails: profileData.uboDetails ?? null,
+      accountDetails: profileData.accountDetails ?? null,
+      whitelistedIps: profileData.whitelistedIps ?? null,
+      apDetails: profileData.apDetails ?? null,
+      averageTicketSize: profileData.averageTicketSize != null ? Number(profileData.averageTicketSize) : null,
+      averageVolume: profileData.averageVolume != null ? Number(profileData.averageVolume) : null,
+      expectedTurnover: profileData.expectedTurnover != null ? Number(profileData.expectedTurnover) : null,
+      turnoverDoneTillDate: profileData.turnoverDoneTillDate != null ? Number(profileData.turnoverDoneTillDate) : null,
+      numberOfTransactionsDone: profileData.numberOfTransactionsDone ?? 0,
+      createdAt: profileData.createdAt ?? null,
+      updatedAt: profileData.updatedAt ?? null,
+    } : {
+      // No profile exists - return all fields as null
+      typeOfEntity: null,
+      pan: null,
+      incorporationDate: null,
+      gst: null,
+      businessAddress: null,
+      registrationNumber: null,
+      mccCodes: null,
+      directorDetails: null,
+      shareholdingPatterns: null,
+      uboDetails: null,
+      accountDetails: null,
+      whitelistedIps: null,
+      apDetails: null,
+      averageTicketSize: null,
+      averageVolume: null,
+      expectedTurnover: null,
+      turnoverDoneTillDate: null,
+      numberOfTransactionsDone: 0,
+      createdAt: null,
+      updatedAt: null,
+    };
     
     const merchantWithProfile = {
       ...merchant,
-      profile: {
-        typeOfEntity: profileData.typeOfEntity ?? null,
-        pan: profileData.pan ?? null,
-        incorporationDate: profileData.incorporationDate ?? null,
-        gst: profileData.gst ?? null,
-        businessAddress: profileData.businessAddress ?? null,
-        registrationNumber: profileData.registrationNumber ?? null,
-        // Preserve whatever Prisma returns - it should handle JSON/JSONB deserialization automatically
-        // Only convert to null if truly undefined (field not selected or missing)
-        mccCodes: profileData.mccCodes !== undefined ? profileData.mccCodes : null,
-        directorDetails: profileData.directorDetails !== undefined ? profileData.directorDetails : null,
-        shareholdingPatterns: profileData.shareholdingPatterns !== undefined ? profileData.shareholdingPatterns : null,
-        uboDetails: profileData.uboDetails !== undefined ? profileData.uboDetails : null,
-        accountDetails: profileData.accountDetails !== undefined ? profileData.accountDetails : null,
-        whitelistedIps: profileData.whitelistedIps !== undefined ? profileData.whitelistedIps : null,
-        apDetails: profileData.apDetails !== undefined ? profileData.apDetails : null,
-        averageTicketSize: profileData.averageTicketSize != null ? Number(profileData.averageTicketSize) : null,
-        averageVolume: profileData.averageVolume != null ? Number(profileData.averageVolume) : null,
-        expectedTurnover: profileData.expectedTurnover != null ? Number(profileData.expectedTurnover) : null,
-        turnoverDoneTillDate: profileData.turnoverDoneTillDate != null ? Number(profileData.turnoverDoneTillDate) : null,
-        numberOfTransactionsDone: profileData.numberOfTransactionsDone ?? 0,
-        createdAt: profileData.createdAt ?? null,
-        updatedAt: profileData.updatedAt ?? null,
-      },
+      profile: normalizedProfile,
     };
 
     return {
@@ -389,15 +398,15 @@ export const adminService = {
       gst: profileData.gst ?? null,
       businessAddress: profileData.businessAddress ?? null,
       registrationNumber: profileData.registrationNumber ?? null,
-      // Preserve whatever Prisma returns - it should handle JSON/JSONB deserialization automatically
-      // Only convert to null if truly undefined (field not selected or missing)
-      mccCodes: profileData.mccCodes !== undefined ? profileData.mccCodes : null,
-      directorDetails: profileData.directorDetails !== undefined ? profileData.directorDetails : null,
-      shareholdingPatterns: profileData.shareholdingPatterns !== undefined ? profileData.shareholdingPatterns : null,
-      uboDetails: profileData.uboDetails !== undefined ? profileData.uboDetails : null,
-      accountDetails: profileData.accountDetails !== undefined ? profileData.accountDetails : null,
-      whitelistedIps: profileData.whitelistedIps !== undefined ? profileData.whitelistedIps : null,
-      apDetails: profileData.apDetails !== undefined ? profileData.apDetails : null,
+        // Direct assignment - Prisma already deserializes JSON/JSONB fields correctly
+        // Use ?? to default to null only if the value is null or undefined
+        mccCodes: profileData.mccCodes ?? null,
+        directorDetails: profileData.directorDetails ?? null,
+        shareholdingPatterns: profileData.shareholdingPatterns ?? null,
+        uboDetails: profileData.uboDetails ?? null,
+        accountDetails: profileData.accountDetails ?? null,
+        whitelistedIps: profileData.whitelistedIps ?? null,
+        apDetails: profileData.apDetails ?? null,
       averageTicketSize: profileData.averageTicketSize != null ? Number(profileData.averageTicketSize) : null,
       averageVolume: profileData.averageVolume != null ? Number(profileData.averageVolume) : null,
       expectedTurnover: profileData.expectedTurnover != null ? Number(profileData.expectedTurnover) : null,
