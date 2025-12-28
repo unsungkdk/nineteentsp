@@ -499,15 +499,15 @@ export async function adminRoutes(fastify: FastifyInstance) {
             gst: { type: 'string', maxLength: 15 },
             businessAddress: { type: 'string' },
             registrationNumber: { type: 'string', maxLength: 100 },
-            // Allow object or null for JSON fields - Zod will validate the structure
+            // Allow object, array, or null for JSON fields - Zod will validate the structure
             // Using array syntax for JSON Schema Draft 7+ compatibility
-            mccCodes: { type: ['object', 'null'] },
-            directorDetails: { type: ['object', 'null'] },
-            shareholdingPatterns: { type: ['object', 'null'] },
-            uboDetails: { type: ['object', 'null'] },
-            accountDetails: { type: ['object', 'null'] },
-            whitelistedIps: { type: ['object', 'null'] },
-            apDetails: { type: ['object', 'null'] },
+            mccCodes: { type: ['object', 'array', 'null'] },
+            directorDetails: { type: ['object', 'array', 'null'] },
+            shareholdingPatterns: { type: ['object', 'array', 'null'] },
+            uboDetails: { type: ['object', 'array', 'null'] },
+            accountDetails: { type: ['object', 'array', 'null'] },
+            whitelistedIps: { type: ['object', 'array', 'null'] },
+            apDetails: { type: ['object', 'array', 'null'] },
             // Allow number or null - Zod will validate
             averageTicketSize: { type: ['number', 'null'] },
             averageVolume: { type: ['number', 'null'] },
