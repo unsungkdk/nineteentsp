@@ -27,6 +27,16 @@ export const errorHandler = (
 
   // Fastify validation errors
   if (error.validation) {
+    // Log the request body to help debug validation issues
+    logger.error('[Error Handler] Validation error - Request body:', {
+      body: request.body,
+      params: request.params,
+      query: request.query,
+      validation: error.validation,
+      path: request.url,
+      method: request.method,
+    });
+    
     reply.status(400).send({
       success: false,
       error: {

@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { adminController } from '../controllers/admin.controller';
 import { authenticateAdmin } from '../middleware/adminAuth.middleware';
+import { logger } from '@tsp/common';
 
 // Validation schemas
 const adminSignInSchema = z.object({
@@ -471,6 +472,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
     '/api/admin/merchants/:merchantId/profile',
     {
       preHandler: [authenticateAdmin],
+      preValidation: async (request, reply) => {
+        // Log the incoming request body for debugging
+        logger.info('[Admin Routes] Update merchant profile request body:', {
+          body: request.body,
+          params: request.params,
+        });
+      },
       schema: {
         description: 'Update or create merchant profile (Admin only)',
         tags: ['Admin'],
