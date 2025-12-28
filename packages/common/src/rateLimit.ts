@@ -1,5 +1,6 @@
 import { getRedisClient } from './redis';
 import { logger } from './logger';
+import { extractIpAddress } from './audit';
 
 export interface RateLimitConfig {
   perSecond: number;
@@ -157,30 +158,6 @@ export const checkRateLimit = async (
   return mostRestrictive;
 };
 
-/**
- * Extract IP address from request headers (Nginx reverse proxy)
- */
-export const extractIpAddress = (headers: Record<string, string | string[] | undefined>): string => {
-  // Priority order for IP detection (Nginx reverse proxy)
-  const forwardedFor = headers['x-forwarded-for'];
-  if (forwardedFor) {
-    // X-Forwarded-For can contain multiple IPs, take the first one
-    const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
-    return ips.split(',')[0].trim();
-  }
-
-  const realIp = headers['x-real-ip'];
-  if (realIp) {
-    return Array.isArray(realIp) ? realIp[0] : realIp;
-  }
-
-  const cfConnectingIp = headers['cf-connecting-ip'];
-  if (cfConnectingIp) {
-    return Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
-  }
-
-  // Fallback - should not happen with Nginx reverse proxy
-  logger.warn('[Rate Limit] Could not extract IP from headers, using unknown');
-  return 'unknown';
-};
+// Re-export extractIpAddress from audit module (shared utility)
+export { extractIpAddress } from './audit';
 
