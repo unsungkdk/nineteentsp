@@ -281,6 +281,20 @@ export const adminService = {
     // Handle both cases: profile is null (doesn't exist) or profile is {} (empty object from Prisma)
     const profileData: any = merchant.profile || {};
     
+    // Debug: Log what Prisma returned for JSON fields (to diagnose the empty object issue)
+    logger.info('[Admin Service] Raw Prisma profile data:', {
+      merchantId,
+      profileExists: !!merchant.profile,
+      mccCodes: profileData.mccCodes,
+      mccCodesType: typeof profileData.mccCodes,
+      mccCodesStringified: JSON.stringify(profileData.mccCodes),
+      whitelistedIps: profileData.whitelistedIps,
+      whitelistedIpsType: typeof profileData.whitelistedIps,
+      whitelistedIpsStringified: JSON.stringify(profileData.whitelistedIps),
+      directorDetails: profileData.directorDetails,
+      directorDetailsStringified: JSON.stringify(profileData.directorDetails),
+    });
+    
     const merchantWithProfile = {
       ...merchant,
       profile: {
@@ -290,8 +304,8 @@ export const adminService = {
         gst: profileData.gst ?? null,
         businessAddress: profileData.businessAddress ?? null,
         registrationNumber: profileData.registrationNumber ?? null,
-        // Prisma automatically deserializes JSON/JSONB fields, so use them directly
-        // If they exist in DB, Prisma returns the actual objects/arrays; if null/undefined, use null
+        // Preserve whatever Prisma returns - it should handle JSON/JSONB deserialization automatically
+        // Only convert to null if truly undefined (field not selected or missing)
         mccCodes: profileData.mccCodes !== undefined ? profileData.mccCodes : null,
         directorDetails: profileData.directorDetails !== undefined ? profileData.directorDetails : null,
         shareholdingPatterns: profileData.shareholdingPatterns !== undefined ? profileData.shareholdingPatterns : null,
@@ -366,6 +380,7 @@ export const adminService = {
 
     // Normalize profile response: ensure all fields are present (null if absent)
     const profileData: any = profile || {};
+    
     const profileWithAllFields = {
       nineteenMerchantId: profileData.nineteenMerchantId ?? merchantId,
       typeOfEntity: profileData.typeOfEntity ?? null,
@@ -374,8 +389,8 @@ export const adminService = {
       gst: profileData.gst ?? null,
       businessAddress: profileData.businessAddress ?? null,
       registrationNumber: profileData.registrationNumber ?? null,
-      // Prisma automatically deserializes JSON/JSONB fields, so use them directly
-      // If they exist in DB, Prisma returns the actual objects/arrays; if null/undefined, use null
+      // Preserve whatever Prisma returns - it should handle JSON/JSONB deserialization automatically
+      // Only convert to null if truly undefined (field not selected or missing)
       mccCodes: profileData.mccCodes !== undefined ? profileData.mccCodes : null,
       directorDetails: profileData.directorDetails !== undefined ? profileData.directorDetails : null,
       shareholdingPatterns: profileData.shareholdingPatterns !== undefined ? profileData.shareholdingPatterns : null,
