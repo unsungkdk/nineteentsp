@@ -276,9 +276,37 @@ export const adminService = {
       throw new NotFoundError('Merchant');
     }
 
+    // Ensure profile object has all fields explicitly set (even if null)
+    // This prevents Prisma from returning an empty object when all fields are null
+    const merchantWithProfile = {
+      ...merchant,
+      profile: merchant.profile ? {
+        typeOfEntity: merchant.profile.typeOfEntity ?? null,
+        pan: merchant.profile.pan ?? null,
+        incorporationDate: merchant.profile.incorporationDate ?? null,
+        gst: merchant.profile.gst ?? null,
+        businessAddress: merchant.profile.businessAddress ?? null,
+        registrationNumber: merchant.profile.registrationNumber ?? null,
+        mccCodes: merchant.profile.mccCodes ?? null,
+        directorDetails: merchant.profile.directorDetails ?? null,
+        shareholdingPatterns: merchant.profile.shareholdingPatterns ?? null,
+        uboDetails: merchant.profile.uboDetails ?? null,
+        accountDetails: merchant.profile.accountDetails ?? null,
+        whitelistedIps: merchant.profile.whitelistedIps ?? null,
+        apDetails: merchant.profile.apDetails ?? null,
+        averageTicketSize: merchant.profile.averageTicketSize ?? null,
+        averageVolume: merchant.profile.averageVolume ?? null,
+        expectedTurnover: merchant.profile.expectedTurnover ?? null,
+        turnoverDoneTillDate: merchant.profile.turnoverDoneTillDate ?? null,
+        numberOfTransactionsDone: merchant.profile.numberOfTransactionsDone ?? null,
+        createdAt: merchant.profile.createdAt ?? null,
+        updatedAt: merchant.profile.updatedAt ?? null,
+      } : null,
+    };
+
     return {
       success: true,
-      merchant,
+      merchant: merchantWithProfile,
     };
   },
 
