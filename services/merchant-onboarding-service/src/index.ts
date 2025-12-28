@@ -5,7 +5,6 @@ import swaggerUi from '@fastify/swagger-ui';
 import { config } from './config';
 import { logger } from '@tsp/common';
 import { rateLimitMiddleware } from './middleware/rateLimit.middleware';
-import { auditMiddleware } from './middleware/audit.middleware';
 import { errorHandler } from './middleware/errorHandler.middleware';
 
 const app = Fastify({
