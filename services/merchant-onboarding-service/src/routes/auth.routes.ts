@@ -152,6 +152,29 @@ export async function authRoutes(fastify: FastifyInstance) {
               },
             },
           },
+          403: {
+            description: 'Forbidden - Account verification required. Different messages for: both unverified, only email unverified, only mobile unverified',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              requiresOtp: { type: 'boolean', example: true },
+              message: { 
+                type: 'string', 
+                description: 'Message indicating what verification is needed',
+                examples: [
+                  'Please verify both your email and mobile number to activate your account.',
+                  'Please verify your email to activate your account.',
+                  'Please verify your mobile number to activate your account.'
+                ]
+              },
+              mfaSessionToken: { type: 'string' },
+              maskedMobile: { type: 'string' },
+              needsEmailVerification: { type: 'boolean' },
+              needsMobileVerification: { type: 'boolean' },
+              isMobileVerified: { type: 'boolean' },
+              isEmailVerified: { type: 'boolean' },
+            },
+          },
           422: {
             description: 'Unprocessable Entity - Account in invalid state',
             type: 'object',

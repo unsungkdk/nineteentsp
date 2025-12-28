@@ -47,8 +47,12 @@ export const authController = {
    * POST /api/auth/signin
    * 
    * Response Codes:
-   * - 200 OK: Password valid, OTP verification required (returns requiresOtp: true)
+   * - 200 OK: Password valid, MFA OTP verification required (for subsequent logins)
    * - 401 Unauthorized: Invalid email or password
+   * - 403 Forbidden: Account verification required
+   *     - Both email and mobile unverified (message: "Please verify both your email and mobile number...")
+   *     - Only email unverified (message: "Please verify your email...")
+   *     - Only mobile unverified (message: "Please verify your mobile number...")
    * - 422 Unprocessable Entity: Account in invalid state
    * - 503 Service Unavailable: SMS/Email service temporarily unavailable
    * - 500 Internal Server Error: Unexpected server error
@@ -63,7 +67,13 @@ export const authController = {
     } catch (error: any) {
       logger.error('[Auth Controller] Sign in error:', error);
       
-      // Use standardized error response format
+      // Handle ForbiddenError with response data (for verification required cases)
+      if (error instanceof AppError && error.statusCode === 403 && (error as any).responseData) {
+        // For verification required cases, return 403 with the response data
+        return reply.status(403).send((error as any).responseData);
+      }
+      
+      // Use standardized error response format for other errors
       if (error instanceof AppError) {
         const errorResponse = formatErrorResponse(error);
         return reply.status(error.statusCode || 500).send(errorResponse);

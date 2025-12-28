@@ -332,10 +332,10 @@ export const authService = {
         }
       }
 
-      return {
+      // Prepare response data
+      const responseData = {
         success: true,
         requiresOtp: true,
-        message: 'Please verify both your email and mobile number to activate your account.',
         mfaSessionToken,
         maskedMobile: maskMobile(merchant.mobile),
         needsEmailVerification: !emailVerified,
@@ -343,6 +343,32 @@ export const authService = {
         isMobileVerified: phoneVerified,
         isEmailVerified: emailVerified,
       };
+
+      // Determine verification status and set appropriate response code (403 Forbidden)
+      // Case 1a: Both email and mobile unverified
+      if (!emailVerified && !phoneVerified) {
+        (responseData as any).message = 'Please verify both your email and mobile number to activate your account.';
+        const error = new ForbiddenError('Account activation required: Both email and mobile verification needed');
+        (error as any).responseData = responseData;
+        throw error;
+      }
+      // Case 1b: Only email unverified
+      else if (!emailVerified && phoneVerified) {
+        (responseData as any).message = 'Please verify your email to activate your account.';
+        const error = new ForbiddenError('Account activation required: Email verification needed');
+        (error as any).responseData = responseData;
+        throw error;
+      }
+      // Case 1c: Only mobile unverified
+      else if (emailVerified && !phoneVerified) {
+        (responseData as any).message = 'Please verify your mobile number to activate your account.';
+        const error = new ForbiddenError('Account activation required: Mobile verification needed');
+        (error as any).responseData = responseData;
+        throw error;
+      }
+
+      // Should not reach here, but if it does, return the response data
+      return responseData;
     }
 
     // Case 2: Subsequent login - Account activated, MFA enabled

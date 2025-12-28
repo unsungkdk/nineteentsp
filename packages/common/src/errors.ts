@@ -52,6 +52,16 @@ export class UnprocessableEntityError extends AppError {
 }
 
 /**
+ * Precondition Required Error (428)
+ * Used when account verification is required before access
+ */
+export class PreconditionRequiredError extends AppError {
+  constructor(message: string, public verificationType?: 'both' | 'email' | 'mobile') {
+    super(428, message);
+  }
+}
+
+/**
  * Standardized error response format
  */
 export interface ErrorResponse {
