@@ -362,10 +362,36 @@ export const adminService = {
 
     logger.info(`[Admin Service] Merchant profile updated for ${merchantId}`);
 
+    // Normalize profile response: ensure all fields are present (null if absent)
+    const profileData: any = profile || {};
+    const profileWithAllFields = {
+      nineteenMerchantId: profileData.nineteenMerchantId ?? merchantId,
+      typeOfEntity: profileData.typeOfEntity ?? null,
+      pan: profileData.pan ?? null,
+      incorporationDate: profileData.incorporationDate ?? null,
+      gst: profileData.gst ?? null,
+      businessAddress: profileData.businessAddress ?? null,
+      registrationNumber: profileData.registrationNumber ?? null,
+      mccCodes: profileData.mccCodes ?? null,
+      directorDetails: profileData.directorDetails ?? null,
+      shareholdingPatterns: profileData.shareholdingPatterns ?? null,
+      uboDetails: profileData.uboDetails ?? null,
+      accountDetails: profileData.accountDetails ?? null,
+      whitelistedIps: profileData.whitelistedIps ?? null,
+      apDetails: profileData.apDetails ?? null,
+      averageTicketSize: profileData.averageTicketSize != null ? Number(profileData.averageTicketSize) : null,
+      averageVolume: profileData.averageVolume != null ? Number(profileData.averageVolume) : null,
+      expectedTurnover: profileData.expectedTurnover != null ? Number(profileData.expectedTurnover) : null,
+      turnoverDoneTillDate: profileData.turnoverDoneTillDate != null ? Number(profileData.turnoverDoneTillDate) : null,
+      numberOfTransactionsDone: profileData.numberOfTransactionsDone ?? 0,
+      createdAt: profileData.createdAt ?? null,
+      updatedAt: profileData.updatedAt ?? null,
+    };
+
     return {
       success: true,
       message: 'Merchant profile updated successfully',
-      profile,
+      profile: profileWithAllFields,
     };
   },
 
