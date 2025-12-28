@@ -205,13 +205,121 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // Get Merchant by ID (Protected)
+  // Get Merchant by ID (Query Parameter) - Alternative endpoint
+  fastify.get(
+    '/api/admin/merchant',
+    {
+      preHandler: [authenticateAdmin],
+      schema: {
+        description: 'Get merchant details by merchant ID using query parameter (Admin only)',
+        tags: ['Admin'],
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: 'object',
+          required: ['merchantId'],
+          properties: {
+            merchantId: { type: 'string', description: 'The 8-digit merchant ID' },
+          },
+        },
+        response: {
+          200: {
+            description: 'Success - Returns merchant details with full profile',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              merchant: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number' },
+                  name: { type: 'string' },
+                  email: { type: 'string' },
+                  mobile: { type: 'string' },
+                  nineteenMerchantId: { type: 'string' },
+                  kycVerified: { type: 'boolean' },
+                  isActive: { type: 'boolean' },
+                  isSettlementActive: { type: 'boolean' },
+                  is2faActive: { type: 'boolean' },
+                  isMobileVerified: { type: 'boolean' },
+                  isEmailVerified: { type: 'boolean' },
+                  state: { type: 'string' },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+                  profile: { type: 'object' },
+                },
+              },
+            },
+          },
+          400: {
+            description: 'Bad Request - Missing merchantId parameter',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'merchantId query parameter is required' },
+                  statusCode: { type: 'number', example: 400 },
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string' },
+                  statusCode: { type: 'number', example: 401 },
+                },
+              },
+            },
+          },
+          404: {
+            description: 'Not Found - Merchant not found',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Merchant not found' },
+                  statusCode: { type: 'number', example: 404 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      return adminController.getMerchantByQuery(request, reply);
+    }
+  );
+
+  // Get Merchant by ID (Path Parameter) - Original endpoint
   fastify.get(
     '/api/admin/merchants/:merchantId',
     {
       preHandler: [authenticateAdmin],
       schema: {
-        description: 'Get merchant details by merchant ID (Admin only)',
+        description: 'Get merchant details by merchant ID using path parameter (Admin only)',
         tags: ['Admin'],
         security: [{ bearerAuth: [] }],
         params: {
@@ -223,11 +331,30 @@ export async function adminRoutes(fastify: FastifyInstance) {
         },
         response: {
           200: {
-            description: 'Success - Returns merchant details',
+            description: 'Success - Returns merchant details with full profile',
             type: 'object',
             properties: {
               success: { type: 'boolean' },
-              merchant: { type: 'object' },
+              merchant: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number' },
+                  name: { type: 'string' },
+                  email: { type: 'string' },
+                  mobile: { type: 'string' },
+                  nineteenMerchantId: { type: 'string' },
+                  kycVerified: { type: 'boolean' },
+                  isActive: { type: 'boolean' },
+                  isSettlementActive: { type: 'boolean' },
+                  is2faActive: { type: 'boolean' },
+                  isMobileVerified: { type: 'boolean' },
+                  isEmailVerified: { type: 'boolean' },
+                  state: { type: 'string' },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+                  profile: { type: 'object' },
+                },
+              },
             },
           },
           401: {

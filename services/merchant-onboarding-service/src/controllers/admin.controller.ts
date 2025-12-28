@@ -108,6 +108,50 @@ export const adminController = {
   },
 
   /**
+   * GET /api/admin/merchant?merchantId=xxx
+   * 
+   * Response Codes:
+   * - 200 OK: Returns merchant details
+   * - 400 Bad Request: Missing merchantId query parameter
+   * - 401 Unauthorized: Invalid or missing authentication token
+   * - 404 Not Found: Merchant not found
+   * - 500 Internal Server Error: Unexpected server error
+   */
+  async getMerchantByQuery(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const merchantId = (request.query as any)?.merchantId;
+      
+      if (!merchantId || typeof merchantId !== 'string') {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            message: 'merchantId query parameter is required',
+            statusCode: 400,
+          },
+        });
+      }
+
+      const result = await adminService.getMerchantById(merchantId);
+      return reply.status(200).send(result);
+    } catch (error: any) {
+      logger.error('[Admin Controller] Get merchant by query error:', error);
+      
+      if (error instanceof AppError) {
+        const errorResponse = formatErrorResponse(error);
+        return reply.status(error.statusCode || 500).send(errorResponse);
+      }
+      
+      return reply.status(500).send({
+        success: false,
+        error: {
+          message: 'Internal server error',
+          statusCode: 500,
+        },
+      });
+    }
+  },
+
+  /**
    * PUT /api/admin/merchants/:merchantId/profile
    * 
    * Response Codes:
