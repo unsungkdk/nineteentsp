@@ -4,10 +4,16 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { config } from './config';
 import { logger } from '@tsp/common';
+import { rateLimitMiddleware } from './middleware/rateLimit.middleware';
+import { auditMiddleware } from './middleware/audit.middleware';
+import { errorHandler } from './middleware/errorHandler.middleware';
 
 const app = Fastify({
   logger: true, // Use Fastify's built-in logger
 });
+
+// Set error handler
+app.setErrorHandler(errorHandler);
 
 // Register plugins
 app.register(cors, {
@@ -72,6 +78,16 @@ app.get('/redoc', async (request, reply) => {
   `;
   reply.type('text/html').send(redocHtml);
 });
+
+// Register global middlewares (applies to all routes)
+
+// Rate limiting - check before processing request
+app.addHook('onRequest', rateLimitMiddleware);
+
+// Audit logging - set up (onRequest) and capture response (onResponse)
+import { auditMiddlewareOnRequest, auditMiddlewareOnResponse } from './middleware/audit.middleware';
+app.addHook('onRequest', auditMiddlewareOnRequest);
+app.addHook('onResponse', auditMiddlewareOnResponse);
 
 // Register routes
 import { authRoutes } from './routes/auth.routes';

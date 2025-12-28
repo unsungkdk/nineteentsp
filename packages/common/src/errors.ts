@@ -39,3 +39,41 @@ export class ConflictError extends AppError {
   }
 }
 
+export class TooManyRequestsError extends AppError {
+  constructor(message = 'Too many requests') {
+    super(429, message);
+  }
+}
+
+export class UnprocessableEntityError extends AppError {
+  constructor(message: string) {
+    super(422, message);
+  }
+}
+
+/**
+ * Standardized error response format
+ */
+export interface ErrorResponse {
+  success: false;
+  error: {
+    message: string;
+    code?: string;
+    statusCode: number;
+    details?: any;
+  };
+}
+
+/**
+ * Format error for API response
+ */
+export const formatErrorResponse = (error: AppError): ErrorResponse => {
+  return {
+    success: false,
+    error: {
+      message: error.message,
+      statusCode: error.statusCode,
+    },
+  };
+}
+

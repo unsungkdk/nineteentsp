@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authController } from '../controllers/auth.controller';
+import { authenticate } from '../middleware/auth.middleware';
 
 // Validation schemas
 const signUpSchema = z.object({
@@ -29,6 +30,18 @@ const verifyOtpSchema = z.object({
 }).refine((data) => data.email || data.mfaSessionToken, {
   message: 'Either email or mfaSessionToken is required',
 });
+
+const passwordResetRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+const passwordResetVerifySchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6),
+  newPassword: z.string().min(8),
+});
+
+// No schema needed for logout - no body required
 
 export async function authRoutes(fastify: FastifyInstance) {
   // Sign Up
@@ -84,7 +97,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     '/api/auth/signin',
     {
       schema: {
-        description: 'Sign in merchant - MFA always required',
+        description: 'Sign in merchant - MFA always required. Returns 200 OK with requiresOtp flag if OTP verification is needed.',
         tags: ['Auth'],
         body: {
           type: 'object',
@@ -96,6 +109,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         },
         response: {
           200: {
+            description: 'Success - Password valid. OTP verification required or token returned if already authenticated.',
             type: 'object',
             properties: {
               success: { type: 'boolean' },
@@ -120,6 +134,62 @@ export async function authRoutes(fastify: FastifyInstance) {
                   isActive: { type: 'boolean' },
                   isMobileVerified: { type: 'boolean' },
                   isEmailVerified: { type: 'boolean' },
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized - Invalid email or password',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Invalid email or password' },
+                  statusCode: { type: 'number', example: 401 },
+                },
+              },
+            },
+          },
+          422: {
+            description: 'Unprocessable Entity - Account in invalid state',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Account is in an invalid state. Please contact support for assistance.' },
+                  statusCode: { type: 'number', example: 422 },
+                },
+              },
+            },
+          },
+          503: {
+            description: 'Service Unavailable - SMS/Email service temporarily unavailable',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'SMS service temporarily unavailable. Please try again later or contact support.' },
+                  statusCode: { type: 'number', example: 503 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
                 },
               },
             },
@@ -218,6 +288,226 @@ export async function authRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const validated = verifyOtpSchema.parse(request.body);
       return authController.verifyOtp({ ...request, body: validated } as any, reply);
+    }
+  );
+
+  // Password Reset - Request OTP
+  fastify.post(
+    '/api/auth/password-reset/request',
+    {
+      schema: {
+        description: 'Request password reset - sends SMS OTP to registered mobile number. Returns success even if email doesn\'t exist (security best practice).',
+        tags: ['Auth'],
+        body: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+          },
+        },
+        response: {
+          200: {
+            description: 'Success - OTP sent (or generic success message if email doesn\'t exist)',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              maskedMobile: { type: 'string' },
+              expiresIn: { type: 'number', description: 'OTP expiry time in seconds' },
+            },
+          },
+          400: {
+            description: 'Bad Request - Validation error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string' },
+                  statusCode: { type: 'number', example: 400 },
+                },
+              },
+            },
+          },
+          503: {
+            description: 'Service Unavailable - SMS service temporarily unavailable',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'SMS service temporarily unavailable. Please try again later or contact support.' },
+                  statusCode: { type: 'number', example: 503 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const validated = passwordResetRequestSchema.parse(request.body);
+      return authController.requestPasswordReset({ ...request, body: validated } as any, reply);
+    }
+  );
+
+  // Password Reset - Verify OTP and Reset Password
+  fastify.post(
+    '/api/auth/password-reset/verify',
+    {
+      schema: {
+        description: 'Verify password reset OTP and set new password',
+        tags: ['Auth'],
+        body: {
+          type: 'object',
+          required: ['email', 'otp', 'newPassword'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+            otp: { type: 'string', minLength: 6, maxLength: 6 },
+            newPassword: { type: 'string', minLength: 8 },
+          },
+        },
+        response: {
+          200: {
+            description: 'Success - Password reset successful',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+            },
+          },
+          400: {
+            description: 'Bad Request - Validation error (invalid password format or OTP format)',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Password must be at least 8 characters long' },
+                  statusCode: { type: 'number', example: 400 },
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Unauthorized - Invalid or expired OTP',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Invalid or expired OTP. Please request a new password reset.' },
+                  statusCode: { type: 'number', example: 401 },
+                },
+              },
+            },
+          },
+          404: {
+            description: 'Not Found - Merchant not found',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Merchant not found' },
+                  statusCode: { type: 'number', example: 404 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const validated = passwordResetVerifySchema.parse(request.body);
+      return authController.verifyPasswordReset({ ...request, body: validated } as any, reply);
+    }
+  );
+
+  // Logout
+  fastify.post(
+    '/api/auth/logout',
+    {
+      preHandler: [authenticate], // Require authentication
+      schema: {
+        description: 'Logout user. Requires authentication token.',
+        tags: ['Auth'],
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: {
+            description: 'Success - Logged out successfully',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+            },
+          },
+          401: {
+            description: 'Unauthorized - Invalid user session or authentication required',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Authentication required' },
+                  statusCode: { type: 'number', example: 401 },
+                },
+              },
+            },
+          },
+          500: {
+            description: 'Internal Server Error',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: false },
+              error: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', example: 'Internal server error' },
+                  statusCode: { type: 'number', example: 500 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      return authController.logout(request, reply);
     }
   );
 }

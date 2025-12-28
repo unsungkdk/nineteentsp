@@ -1,48 +1,44 @@
-import { createClient, RedisClientType } from 'redis';
+// Redis client is now in @tsp/common package
+// Re-export with service-specific config
+import { getRedisClient as getCommonRedisClient } from '@tsp/common';
+import type { RedisClientType } from 'redis';
 import { config } from '../config';
-import { logger } from '@tsp/common';
+import { v4 as uuidv4 } from 'uuid';
 
-let redisClient: RedisClientType | null = null;
+export interface MfaSession {
+  merchantId: number;
+  email: string;
+  mobile: string;
+  emailOtpVerified: boolean;
+  smsOtpVerified: boolean;
+  isMfaOnly: boolean; // True for subsequent logins (SMS only), false for first-time activation (email + SMS)
+  expiresAt: number; // Unix timestamp
+  attempts: number;
+}
 
 /**
- * Get Redis client instance (singleton)
+ * Get Redis client instance with service-specific config
  */
 export const getRedisClient = async (): Promise<RedisClientType> => {
-  if (!redisClient) {
-    redisClient = createClient({
-      url: config.redis.url,
-    });
-
-    redisClient.on('error', (err) => {
-      logger.error(`[Redis] Redis Client Error: ${err}`);
-    });
-
-    redisClient.on('connect', () => {
-      logger.info('[Redis] Redis Client Connected');
-    });
-
-    redisClient.on('ready', () => {
-      logger.info('[Redis] Redis Client Ready');
-    });
-
-    redisClient.on('reconnecting', () => {
-      logger.info('[Redis] Redis Client Reconnecting');
-    });
-
-    await redisClient.connect();
-  }
-
-  return redisClient;
+  return getCommonRedisClient(config.redis.url);
 };
 
 /**
- * Close Redis connection
+ * Close Redis connection (re-export from common)
  */
-export const closeRedisConnection = async (): Promise<void> => {
-  if (redisClient) {
-    await redisClient.quit();
-    redisClient = null;
-    logger.info('[Redis] Redis Client Disconnected');
-  }
+export { closeRedisConnection } from '@tsp/common';
+
+/**
+ * Generate MFA session token
+ */
+export const generateMfaSessionToken = (): string => {
+  return uuidv4();
 };
 
+/**
+ * Mask mobile number for display
+ */
+export const maskMobile = (mobile: string): string => {
+  if (mobile.length < 7) return mobile; // Not enough digits to mask meaningfully
+  return mobile.substring(0, 4) + '****' + mobile.substring(mobile.length - 3);
+};

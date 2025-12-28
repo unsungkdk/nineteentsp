@@ -1,6 +1,20 @@
 import { PrismaClient } from '@prisma/client';
-import { hashPassword, comparePassword, generateToken, JWTPayload, logger } from '@tsp/common';
-import { ValidationError, NotFoundError, UnauthorizedError, ConflictError } from '@tsp/common';
+import { 
+  hashPassword, 
+  comparePassword, 
+  generateToken, 
+  JWTPayload, 
+  logger 
+} from '@tsp/common';
+import { 
+  ValidationError, 
+  NotFoundError, 
+  UnauthorizedError, 
+  ConflictError,
+  ForbiddenError,
+  UnprocessableEntityError,
+  AppError
+} from '@tsp/common';
 import { sendOtpEmail as sendBrevoEmail } from './email.service';
 import { sendOtpSms as sendSmsOtp } from './sms.service';
 import { getRedisClient } from './redis.service';
@@ -45,6 +59,20 @@ export interface VerifyOtpInput {
   mfaSessionToken?: string; // MFA session token from sign-in (SMS OTP only)
   otp: string;
   otpType: 'email' | 'mobile' | 'sms'; // MFA sessions only accept 'sms' or 'mobile'
+}
+
+export interface PasswordResetRequestInput {
+  email: string;
+}
+
+export interface PasswordResetVerifyInput {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface LogoutInput {
+  // No input required - logout only needs authentication token
 }
 
 /**
@@ -194,15 +222,19 @@ export const authService = {
       },
     });
 
+    // Case 0a: Merchant not found
     if (!merchant) {
-      throw new UnauthorizedError('Invalid email or password');
+      logger.warn(`[Auth Service] Sign-in attempt with non-existent email: ${input.email}`);
+      throw new UnauthorizedError('Invalid email or password'); // 401 - Don't reveal if email exists
     }
 
     // Verify password
     const isPasswordValid = await comparePassword(input.password, merchant.password);
 
+    // Case 0b: Invalid password
     if (!isPasswordValid) {
-      throw new UnauthorizedError('Invalid email or password');
+      logger.warn(`[Auth Service] Invalid password attempt for email: ${input.email}`);
+      throw new UnauthorizedError('Invalid email or password'); // 401 - Generic error for security
     }
 
     // Check account status
@@ -211,7 +243,12 @@ export const authService = {
     const emailVerified = merchant.isEmailVerified;
     const accountActive = merchant.isActive;
 
-    // Case 1: First-time login - Account not activated
+    // Case 0c: Account suspended/disabled (if explicitly disabled after being active)
+    // Note: Inactive accounts can still sign in to complete verification (Case 1)
+    // This check would be for accounts that were previously active but then disabled
+    // For now, we'll allow inactive accounts to proceed to verification
+    
+    // Case 1: First-time login - Account not activated or not fully verified
     // Require BOTH email AND mobile verification to activate account
     if (!accountActive || !emailVerified || !phoneVerified) {
       logger.info(`[Auth Service] First-time login for ${input.email}. Account active: ${accountActive}, Email verified: ${emailVerified}, Phone verified: ${phoneVerified}`);
@@ -287,7 +324,11 @@ export const authService = {
           logger.info(`[Auth Service] SMS OTP sent to ${merchant.mobile} for first-time activation`);
         } catch (error: any) {
           logger.error(`[Auth Service] Failed to send SMS OTP:`, error);
-          throw error;
+          // SMS service failure - treat as temporary service unavailability
+          throw new AppError(
+            503,
+            'SMS service temporarily unavailable. Please try again later or contact support.'
+          );
         }
       }
 
@@ -355,7 +396,11 @@ export const authService = {
         logger.info(`[Auth Service] SMS OTP sent to ${merchant.mobile} for MFA login`);
       } catch (error: any) {
         logger.error(`[Auth Service] Failed to send SMS OTP:`, error);
-        throw error;
+        // SMS service failure - treat as temporary service unavailability
+        throw new AppError(
+          503,
+          'SMS service temporarily unavailable. Please try again later or contact support.'
+        );
       }
 
     return {
@@ -371,10 +416,12 @@ export const authService = {
       };
     }
 
-    // This should never happen - all cases should be handled above
-    // If we reach here, it's an unexpected state
+    // Case 3: Unexpected/invalid account state
+    // This should not happen in normal flow, but handle it gracefully
     logger.error(`[Auth Service] Unexpected state reached for ${input.email}. Account active: ${accountActive}, MFA enabled: ${mfaEnabled}, Email verified: ${emailVerified}, Phone verified: ${phoneVerified}`);
-    throw new Error('Unexpected authentication state. Please contact support.');
+    throw new UnprocessableEntityError(
+      'Account is in an invalid state. Please contact support for assistance.'
+    ); // 422 - Valid request format but invalid state
   },
 
   /**
@@ -795,6 +842,179 @@ export const authService = {
         };
       }
     }
+  },
+
+  /**
+   * Request password reset - sends SMS OTP
+   */
+  async requestPasswordReset(input: PasswordResetRequestInput) {
+    // Find merchant by email
+    const merchant = await prisma.merchantsMaster.findUnique({
+      where: { email: input.email },
+      select: {
+        id: true,
+        email: true,
+        mobile: true,
+        name: true,
+        isActive: true,
+      },
+    });
+
+    // Don't reveal if email exists - return success either way (security best practice)
+    if (!merchant) {
+      logger.warn(`[Auth Service] Password reset requested for non-existent email: ${input.email}`);
+      // Return success to prevent email enumeration attacks
+      return {
+        success: true,
+        message: 'If the email exists, a password reset OTP has been sent to your registered mobile number.',
+      };
+    }
+
+    // Check if account is active
+    if (!merchant.isActive) {
+      logger.warn(`[Auth Service] Password reset requested for inactive account: ${input.email}`);
+      // Still return success to prevent account enumeration
+      return {
+        success: true,
+        message: 'If the email exists, a password reset OTP has been sent to your registered mobile number.',
+      };
+    }
+
+    // Generate OTP
+    const resetOtp = generateOtp();
+    const otpExpiresAt = new Date();
+    otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 10); // 10 minutes expiry
+
+    // Store OTP in database with type 'password_reset'
+    await prisma.merchantOtp.create({
+      data: {
+        email: merchant.email,
+        otp: resetOtp,
+        expiresAt: otpExpiresAt,
+        otpType: 'sms', // Password reset uses SMS only
+        mobile: merchant.mobile,
+        isUsed: false,
+      },
+    });
+
+    // Send SMS OTP
+    try {
+      await sendSmsOtp(merchant.mobile, resetOtp, merchant.name);
+      logger.info(`[Auth Service] Password reset OTP sent to ${merchant.mobile} for ${input.email}`);
+    } catch (error: any) {
+      logger.error(`[Auth Service] Failed to send password reset SMS OTP:`, error);
+      throw new AppError(
+        503,
+        'SMS service temporarily unavailable. Please try again later or contact support.'
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Password reset OTP has been sent to your registered mobile number.',
+      maskedMobile: maskMobile(merchant.mobile),
+      expiresIn: 600, // 10 minutes in seconds
+    };
+  },
+
+  /**
+   * Verify password reset OTP and update password
+   */
+  async verifyPasswordReset(input: PasswordResetVerifyInput) {
+    // Validate new password
+    if (input.newPassword.length < 8) {
+      throw new ValidationError('Password must be at least 8 characters long');
+    }
+
+    // Find merchant
+    const merchant = await prisma.merchantsMaster.findUnique({
+      where: { email: input.email },
+      select: {
+        id: true,
+        email: true,
+        mobile: true,
+        isActive: true,
+      },
+    });
+
+    if (!merchant) {
+      throw new NotFoundError('Merchant');
+    }
+
+    // Find valid OTP
+    const otpRecord = await prisma.merchantOtp.findFirst({
+      where: {
+        email: input.email,
+        otp: input.otp,
+        otpType: 'sms',
+        isUsed: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (!otpRecord) {
+      throw new UnauthorizedError('Invalid or expired OTP. Please request a new password reset.');
+    }
+
+    // Mark OTP as used
+    await prisma.merchantOtp.update({
+      where: { id: otpRecord.id },
+      data: { isUsed: true },
+    });
+
+    // Hash new password
+    const hashedPassword = await hashPassword(input.newPassword);
+
+    // Update password
+    await prisma.merchantsMaster.update({
+      where: { email: input.email },
+      data: { password: hashedPassword },
+    });
+
+    logger.info(`[Auth Service] Password reset successful for ${input.email}`);
+
+    // Invalidate all existing sessions (optional - can be implemented with Redis token blacklist)
+    // For now, we just update the password
+
+    return {
+      success: true,
+      message: 'Password has been reset successfully. Please sign in with your new password.',
+    };
+  },
+
+  /**
+   * Logout user
+   * Note: Actual token invalidation should be handled via Redis token blacklist
+   * or by setting token expiry. This endpoint confirms logout action.
+   */
+  async logout(userId: number, email: string) {
+    // Find merchant
+    const merchant = await prisma.merchantsMaster.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
+
+    if (!merchant || merchant.id !== userId) {
+      throw new UnauthorizedError('Invalid user session');
+    }
+
+    logger.info(`[Auth Service] User logged out: ${email}`);
+
+    // Note: Actual token invalidation should be handled via Redis token blacklist
+    // or by setting token expiry. This endpoint confirms logout action.
+
+    return {
+      success: true,
+      message: 'Logged out successfully',
+    };
   },
 };
 

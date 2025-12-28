@@ -76,3 +76,30 @@ model MerchantAccessLog {
   @@map("merchant_access_logs")
 }
 
+model AuditLog {
+  id                BigInt    @id @default(autoincrement())
+  sessionId         String    @map("session_id") @db.VarChar(255)
+  userId            Int?      @map("user_id")
+  merchantId        String?   @map("merchant_id") @db.VarChar(50)
+  email             String?   @db.VarChar(255)
+  ipAddress         String    @map("ip_address") @db.VarChar(45)
+  userAgent         String?   @map("user_agent") @db.Text
+  requestMethod     String    @map("request_method") @db.VarChar(10)
+  requestPath       String    @map("request_path") @db.Text
+  requestQuery      Json?     @map("request_query")
+  requestBody       Json?     @map("request_body")
+  responseStatus    Int       @map("response_status")
+  responseTimeMs    Int?      @map("response_time_ms")
+  routeName         String?   @map("route_name") @db.VarChar(255)
+  actionType        String?   @map("action_type") @db.VarChar(50)
+  metadata          Json?     @db.JsonB
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([sessionId], name: "idx_audit_logs_session_id")
+  @@index([userId], name: "idx_audit_logs_user_id")
+  @@index([merchantId], name: "idx_audit_logs_merchant_id")
+  @@index([createdAt], name: "idx_audit_logs_created_at")
+  @@index([ipAddress], name: "idx_audit_logs_ip_address")
+  @@map("audit_logs")
+}
+
