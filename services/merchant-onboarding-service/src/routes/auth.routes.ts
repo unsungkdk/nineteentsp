@@ -21,7 +21,7 @@ const signInSchema = z.object({
 });
 
 const sendOtpSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(1, 'Email is required').email('Please provide a valid email address'),
   otpType: z.enum(['email', 'mobile', 'sms']),
 });
 
@@ -243,7 +243,12 @@ export async function authRoutes(fastify: FastifyInstance) {
           type: 'object',
           required: ['email', 'otpType'],
           properties: {
-            email: { type: 'string', format: 'email' },
+            email: { 
+              type: 'string', 
+              format: 'email',
+              minLength: 1,
+              pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'
+            },
             otpType: { type: 'string', enum: ['email', 'mobile', 'sms'] },
           },
         },

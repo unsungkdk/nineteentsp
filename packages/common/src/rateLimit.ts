@@ -33,16 +33,28 @@ export const baseRateLimits: Record<string, RateLimitConfig> = {
     perDay: 100,
   },
   '/api/auth/send-otp': {
-    perSecond: 1,
-    perMinute: 3,
-    perHour: 10,
-    perDay: 30,
+    perSecond: 3,      // Allow 3 requests per second (user might retry if OTP not received)
+    perMinute: 10,     // Allow 10 requests per minute (reasonable retry limit)
+    perHour: 20,       // Allow 20 requests per hour (prevents abuse while allowing legitimate retries)
+    perDay: 50,        // Allow 50 requests per day (prevents abuse)
   },
   '/api/auth/verify-otp': {
     perSecond: 2,
     perMinute: 10,
     perHour: 50,
     perDay: 200,
+  },
+  '/api/auth/password-reset/request': {
+    perSecond: 3,      // Allow 3 requests per second (user might retry if OTP not received)
+    perMinute: 10,     // Allow 10 requests per minute (reasonable retry limit)
+    perHour: 20,       // Allow 20 requests per hour (prevents abuse while allowing legitimate retries)
+    perDay: 50,        // Allow 50 requests per day (prevents abuse)
+  },
+  '/api/auth/password-reset/verify': {
+    perSecond: 5,      // Allow multiple verification attempts
+    perMinute: 20,     // Allow 20 attempts per minute (user might enter wrong OTP)
+    perHour: 100,      // Allow 100 attempts per hour
+    perDay: 500,       // Allow 500 attempts per day
   },
   '/api/admin/signin': {
     perSecond: 2,
@@ -57,10 +69,10 @@ export const baseRateLimits: Record<string, RateLimitConfig> = {
     perDay: 1000,
   },
   '/api/admin/password-reset/request': {
-    perSecond: 1,
-    perMinute: 3,
-    perHour: 10,
-    perDay: 30,
+    perSecond: 3,      // Allow 3 requests per second (user might retry if OTP not received)
+    perMinute: 10,     // Allow 10 requests per minute (reasonable retry limit)
+    perHour: 20,       // Allow 20 requests per hour (prevents abuse while allowing legitimate retries)
+    perDay: 50,        // Allow 50 requests per day (prevents abuse)
   },
   '/api/admin/password-reset/verify': {
     perSecond: 2,

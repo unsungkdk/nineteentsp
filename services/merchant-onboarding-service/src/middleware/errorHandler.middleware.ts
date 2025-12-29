@@ -37,10 +37,36 @@ export const errorHandler = (
       method: request.method,
     });
     
+    // Create user-friendly error messages from validation errors
+    const validationMessages = error.validation.map((err: any) => {
+      const field = err.instancePath?.replace('/', '') || err.params?.missingProperty || 'field';
+      let message = '';
+      
+      if (err.keyword === 'format') {
+        if (field === 'email') {
+          message = 'Please provide a valid email address';
+        } else {
+          message = `${field} format is invalid`;
+        }
+      } else if (err.keyword === 'required') {
+        message = `${field} is required`;
+      } else if (err.keyword === 'enum') {
+        message = `${field} must be one of: ${err.params?.allowedValues?.join(', ')}`;
+      } else if (err.keyword === 'minLength') {
+        message = `${field} cannot be empty`;
+      } else {
+        message = err.message || 'Validation error';
+      }
+      
+      return message;
+    });
+    
+    const primaryMessage = validationMessages[0] || 'Validation error';
+    
     reply.status(400).send({
       success: false,
       error: {
-        message: 'Validation error',
+        message: primaryMessage,
         statusCode: 400,
         details: error.validation,
       },

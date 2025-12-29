@@ -89,14 +89,20 @@ export const rateLimitMiddleware = async (
 
     logger.debug(`[Rate Limit] Allowed request for ${endpoint} from IP ${ipAddress}. Remaining: ${result.remaining}/${result.limit} (${result.window})`);
   } catch (error: any) {
-    // If it's already a TooManyRequestsError, rethrow it
+    // If it's already a TooManyRequestsError, rethrow it (don't log as error)
     if (error instanceof TooManyRequestsError) {
+      // Log as warning since this is expected behavior, not an error
+      logger.warn(`[Rate Limit] ${error.message}`);
       throw error;
     }
 
     // For other errors (e.g., Redis connection issues), log and allow request
     // Don't block requests if rate limiting fails
-    logger.error(`[Rate Limit] Error checking rate limit: ${error.message}`);
+    logger.error(`[Rate Limit] Error checking rate limit: ${error.message}`, {
+      error: error.stack,
+      endpoint,
+      ipAddress,
+    });
     // Allow request to proceed if rate limiting check fails
   }
 };
