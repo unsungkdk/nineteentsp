@@ -10,13 +10,18 @@ export const errorHandler = (
   request: FastifyRequest,
   reply: FastifyReply
 ): void => {
-  // Log error
-  logger.error(`[Error Handler] ${error.message}`, {
-    statusCode: error.statusCode,
-    path: request.url,
-    method: request.method,
-    stack: error.stack,
-  });
+  // Don't log validation errors with full stack trace (they're expected client errors)
+  if (error.validation) {
+    // Will log below with more context
+  } else {
+    // Log non-validation errors with full details
+    logger.error(`[Error Handler] ${error.message}`, {
+      statusCode: error.statusCode,
+      path: request.url,
+      method: request.method,
+      stack: error.stack,
+    });
+  }
 
   // If it's an AppError (our custom error), use its status code
   if (error instanceof AppError) {
@@ -53,7 +58,17 @@ export const errorHandler = (
       } else if (err.keyword === 'enum') {
         message = `${field} must be one of: ${err.params?.allowedValues?.join(', ')}`;
       } else if (err.keyword === 'minLength') {
-        message = `${field} cannot be empty`;
+        if (field === 'email') {
+          message = 'Email is required and cannot be empty';
+        } else {
+          message = `${field} cannot be empty`;
+        }
+      } else if (err.keyword === 'pattern') {
+        if (field === 'email') {
+          message = 'Please provide a valid email address';
+        } else {
+          message = `${field} format is invalid`;
+        }
       } else {
         message = err.message || 'Validation error';
       }

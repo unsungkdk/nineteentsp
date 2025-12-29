@@ -53,7 +53,8 @@ export interface SignInInput {
 }
 
 export interface SendOtpInput {
-  email: string;
+  email?: string; // Optional if mfaSessionToken is provided
+  mfaSessionToken?: string; // MFA session token from sign-in (allows resending OTP without email)
   otpType: 'email' | 'mobile' | 'sms';
 }
 
@@ -455,11 +456,39 @@ export const authService = {
 
   /**
    * Send OTP to email or mobile
+   * Supports both email-based and mfaSessionToken-based requests
    */
   async sendOtp(input: SendOtpInput) {
+    let merchantEmail: string;
+    let merchant: any;
+
+    // If mfaSessionToken is provided, get email from session
+    if (input.mfaSessionToken) {
+      const redisClient = await getRedisClient();
+      const sessionData = await redisClient.get(`mfa:session:${input.mfaSessionToken}`);
+
+      if (!sessionData) {
+        throw new UnauthorizedError('Invalid or expired MFA session. Please sign in again.');
+      }
+
+      const mfaSession = JSON.parse(sessionData) as MfaSession;
+
+      // Check if session is expired
+      if (Date.now() > mfaSession.expiresAt) {
+        await redisClient.del(`mfa:session:${input.mfaSessionToken}`);
+        throw new UnauthorizedError('MFA session has expired. Please sign in again.');
+      }
+
+      merchantEmail = mfaSession.email;
+    } else if (input.email) {
+      merchantEmail = input.email;
+    } else {
+      throw new ValidationError('Either email or mfaSessionToken is required');
+    }
+
     // Find merchant
-    const merchant = await prisma.merchantsMaster.findUnique({
-      where: { email: input.email },
+    merchant = await prisma.merchantsMaster.findUnique({
+      where: { email: merchantEmail },
     });
 
     if (!merchant) {
@@ -472,7 +501,7 @@ export const authService = {
 
     const activeOtp = await prisma.merchantOtp.findFirst({
       where: {
-        email: input.email,
+        email: merchantEmail,
         otpType: input.otpType,
         isUsed: false,
         expiresAt: {
@@ -500,7 +529,7 @@ export const authService = {
     // Save OTP to database
     await prisma.merchantOtp.create({
       data: {
-        email: input.email,
+        email: merchantEmail,
         otp,
         expiresAt,
         otpType: input.otpType,
@@ -511,12 +540,12 @@ export const authService = {
 
     // Send OTP via appropriate channel
     if (input.otpType === 'email') {
-      logger.info(`[Auth Service] Sending OTP email to ${input.email} for merchant ${merchant.name}`);
+      logger.info(`[Auth Service] Sending OTP email to ${merchantEmail} for merchant ${merchant.name}`);
       try {
-        await sendOtpEmail(input.email, otp, merchant.name);
-        logger.info(`[Auth Service] OTP email sent successfully to ${input.email}`);
+        await sendOtpEmail(merchantEmail, otp, merchant.name);
+        logger.info(`[Auth Service] OTP email sent successfully to ${merchantEmail}`);
       } catch (error: any) {
-        logger.error(`[Auth Service] Failed to send OTP email to ${input.email}:`, error);
+        logger.error(`[Auth Service] Failed to send OTP email to ${merchantEmail}:`, error);
         throw error;
       }
     } else if (input.otpType === 'mobile' || input.otpType === 'sms') {

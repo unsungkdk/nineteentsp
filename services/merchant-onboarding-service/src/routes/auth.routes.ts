@@ -21,8 +21,11 @@ const signInSchema = z.object({
 });
 
 const sendOtpSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Please provide a valid email address'),
+  email: z.string().email('Please provide a valid email address').optional(),
+  mfaSessionToken: z.string().optional(),
   otpType: z.enum(['email', 'mobile', 'sms']),
+}).refine((data) => data.email || data.mfaSessionToken, {
+  message: 'Either email or mfaSessionToken is required',
 });
 
 const verifyOtpSchema = z.object({
@@ -241,13 +244,18 @@ export async function authRoutes(fastify: FastifyInstance) {
         tags: ['Auth'],
         body: {
           type: 'object',
-          required: ['email', 'otpType'],
+          required: ['otpType'],
           properties: {
             email: { 
               type: 'string', 
               format: 'email',
               minLength: 1,
-              pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'
+              pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$',
+              description: 'Email address (required if mfaSessionToken is not provided)'
+            },
+            mfaSessionToken: { 
+              type: 'string',
+              description: 'MFA session token from sign-in (required if email is not provided)'
             },
             otpType: { type: 'string', enum: ['email', 'mobile', 'sms'] },
           },
