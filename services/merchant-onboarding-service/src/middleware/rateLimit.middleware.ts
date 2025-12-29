@@ -98,6 +98,10 @@ export const rateLimitMiddleware = async (
 
     // For other errors (e.g., Redis connection issues), log and allow request
     // Don't block requests if rate limiting fails
+    // Extract endpoint and IP from request for error logging
+    const endpoint = request.url.split('?')[0];
+    const ipAddress = extractIpAddress(request.headers, request.socket);
+    
     logger.error(`[Rate Limit] Error checking rate limit: ${error.message}`, {
       error: error.stack,
       endpoint,
